@@ -1,0 +1,38 @@
+#include <iostream>
+#include <opencv4/opencv2/opencv.hpp>
+
+using namespace cv;
+using namespace std;
+
+int main() {
+	std::cout << "Check" << std::endl;
+
+	VideoCapture capture("rtsp://192.168.2.18:2544/live",cv::CAP_FFMPEG);	//REPLACE URL WITH YOUR OWN
+	
+	if(!capture.isOpened()) {
+		cout << "Error: Cannot open the RTSP stream" << endl;
+		return -1;
+	}
+	
+	Mat frame;
+	
+	while(true) {
+		bool isFrameGrabbed = capture.grab();
+		if(!isFrameGrabbed) {
+			cout << "Error: Cannot grab frame from RTSP frame" << endl;
+			break;
+		}
+		
+		capture.retrieve(frame);
+		
+		imshow("RTSP Stream", frame);
+		if(waitKey(30) == 'q') {
+			break;
+		}
+	}
+	capture.release();
+	destroyAllWindows();
+		
+	return 0;
+	
+}
