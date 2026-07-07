@@ -24,9 +24,8 @@ def main():
     print(f"Device: {device}")
 
     model = YOLO(str(model_path))
-    model.predict(
+    results=model.predict(
         source=str(image_path),
-        save=True,
         project=str(RUNS_DIR),
         name="predict-test",
         exist_ok=True,
@@ -34,6 +33,11 @@ def main():
         device=device,
     )
 
+    for result in results:
+        print(result.boxes)
+        print(result.names)
+
+    print(model.names)
 
 if __name__ == "__main__":
     main()
