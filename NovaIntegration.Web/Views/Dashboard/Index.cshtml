@@ -1,0 +1,103 @@
+@model NovaIntegration.Web.Models.DashboardViewModel
+
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<h1>Security Dashboard</h1>
+
+<div class="dashboard-cards">
+
+    <div class="card">
+        <h3>Total Cameras</h3>
+        <h2>@Model.TotalCameras</h2>
+    </div>
+
+    <div class="card">
+        <h3>Active Cameras</h3>
+        <h2>@Model.ActiveCameras</h2>
+    </div>
+
+    <div class="card">
+        <h3>Alerts Today</h3>
+        <h2>@Model.AlertsToday</h2>
+    </div>
+
+    <div class="card">
+        <h3>Detections Today</h3>
+        <h2>@Model.DetectionsToday</h2>
+    </div>
+
+</div>
+
+<br />
+
+<h2>Recent Alerts</h2>
+
+<table class="table table-bordered table-striped">
+
+    <thead>
+
+        <tr>
+
+            <th>Camera</th>
+            <th>Object</th>
+            <th>Severity</th>
+            <th>Confidence</th>
+
+        </tr>
+
+    </thead>
+
+    <tbody>
+
+        @foreach (var item in Model.RecentAlerts)
+        {
+            <tr>
+
+                <td>@item.CameraName</td>
+                <td>@item.ObjectType</td>
+                <td>@item.Severity</td>
+                <td>@item.Confidence %</td>
+
+            </tr>
+        }
+
+    </tbody>
+
+</table>
+
+<br />
+
+<h2>Camera Status</h2>
+
+<table class="table table-bordered">
+
+    <thead>
+
+        <tr>
+
+            <th>Camera</th>
+            <th>Location</th>
+            <th>Status</th>
+
+        </tr>
+
+    </thead>
+
+    <tbody>
+
+        @foreach (var item in Model.CameraStatuses)
+        {
+            <tr>
+
+                <td>@item.CameraName</td>
+                <td>@item.Location</td>
+                <td>@item.Status</td>
+
+            </tr>
+        }
+
+    </tbody>
+
+</table>
