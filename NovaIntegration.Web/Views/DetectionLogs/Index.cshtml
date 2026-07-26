@@ -1,0 +1,146 @@
+@model List<NovaIntegration.Web.Models.Detection>
+
+@{
+    ViewData["Title"] = "Detection Logs";
+}
+
+<div class="detection-page-header">
+    <div>
+        <h1>Detection Logs</h1>
+        <p>Review AI-generated object detection records from connected cameras.</p>
+    </div>
+
+    <div class="detection-summary">
+        <span>Total Records: @Model.Count</span>
+        <span>
+            Today:
+            @Model.Count(detection => detection.DetectedAt.Date == DateTime.Today)
+        </span>
+    </div>
+</div>
+
+<div class="detection-filter-bar">
+    <input id="detectionSearch"
+           type="search"
+           placeholder="Search camera, location, alert or object..."
+           onkeyup="filterDetections()" />
+
+    <select id="objectFilter" onchange="filterDetections()">
+        <option value="">All Objects</option>
+        <option value="person">Person</option>
+        <option value="vehicle">Vehicle</option>
+        <option value="package">Package</option>
+    </select>
+</div>
+
+<div class="detection-table-card">
+    <div class="table-responsive">
+        <table class="table detection-table" id="detectionTable">
+            <thead>
+                <tr>
+                    <th>Detection ID</th>
+                    <th>Camera</th>
+                    <th>Location</th>
+                    <th>Object</th>
+                    <th>Confidence</th>
+                    <th>Alert Type</th>
+                    <th>Detected At</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var detection in Model)
+                {
+                    <tr data-object="@detection.ObjectType.ToLower()">
+                        <td>
+                            <strong>#@detection.DetectionId</strong>
+                        </td>
+
+                        <td>
+                            <strong>@detection.CameraName</strong>
+                        </td>
+
+                        <td>@detection.Location</td>
+
+                        <td>
+                            <span class="object-badge">
+                                @detection.ObjectType
+                            </span>
+                        </td>
+
+                        <td>
+                            <span class="confidence-value">
+                                @detection.Confidence.ToString("0.0")%
+                            </span>
+                        </td>
+
+                        <td>@detection.AlertType</td>
+
+                        <td>
+                            @detection.DetectedAt.ToString("dd MMM yyyy, h:mm tt")
+                        </td>
+
+                        <td>
+                            <button type="button"
+                                    class="detection-view-button"
+                                    onclick="showDetection('@detection.DetectionId')">
+                                View
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div id="noDetectionsMessage" class="no-detections-message">
+        No detection records match the selected filters.
+    </div>
+</div>
+
+<script>
+    function filterDetections() {
+        const searchValue =
+            document.getElementById("detectionSearch").value.toLowerCase();
+
+        const objectValue =
+            document.getElementById("objectFilter").value;
+
+        const rows =
+            document.querySelectorAll("#detectionTable tbody tr");
+
+        let visibleRows = 0;
+
+        rows.forEach(row => {
+            const rowText = row.innerText.toLowerCase();
+            const rowObject = row.dataset.object;
+
+            const matchesSearch =
+                rowText.includes(searchValue);
+
+            const matchesObject =
+                objectValue === "" || rowObject === objectValue;
+
+            const shouldShow =
+                matchesSearch && matchesObject;
+
+            row.style.display = shouldShow ? "" : "none";
+
+            if (shouldShow) {
+                visibleRows++;
+            }
+        });
+
+        document.getElementById("noDetectionsMessage").style.display =
+            visibleRows === 0 ? "block" : "none";
+    }
+
+    function showDetection(detectionId) {
+        alert(
+            "Detection #" +
+            detectionId +
+            " selected. Real image preview will be connected during backend integration."
+        );
+    }
+</script>

@@ -1,0 +1,73 @@
+@model List<NovaIntegration.Web.Models.Camera>
+
+@{
+    ViewData["Title"] = "Cameras";
+}
+
+<div class="camera-page-header">
+    <div>
+        <h1>Camera Monitoring</h1>
+        <p>View connected cameras, locations and current operating status.</p>
+    </div>
+
+    <div class="camera-summary">
+        <span>Total Cameras: @Model.Count</span>
+        <span>Online: @Model.Count(camera => camera.Status == "Online")</span>
+    </div>
+</div>
+
+<div class="camera-grid">
+    @foreach (var camera in Model)
+    {
+        string statusClass = camera.Status switch
+        {
+            "Online" => "camera-status-online",
+            "Offline" => "camera-status-offline",
+            _ => "camera-status-maintenance"
+        };
+
+        <div class="camera-card">
+            <div class="camera-preview">
+                <div class="camera-preview-icon">CAM</div>
+
+                <span class="camera-status-badge @statusClass">
+                    @camera.Status
+                </span>
+            </div>
+
+            <div class="camera-card-content">
+                <h2>@camera.CameraName</h2>
+
+                <div class="camera-detail-row">
+                    <span class="camera-detail-label">Location</span>
+                    <span>@camera.Location</span>
+                </div>
+
+                <div class="camera-detail-row">
+                    <span class="camera-detail-label">IP Address</span>
+                    <span>@camera.IpAddress</span>
+                </div>
+
+                <div class="camera-detail-row">
+                    <span class="camera-detail-label">Stream Type</span>
+                    <span>@camera.StreamType</span>
+                </div>
+
+                <div class="camera-detail-row">
+                    <span class="camera-detail-label">Last Activity</span>
+                    <span>@camera.LastActivity.ToString("dd MMM yyyy, h:mm tt")</span>
+                </div>
+
+                <div class="camera-card-actions">
+                    <button class="camera-primary-button" type="button">
+                        View Camera
+                    </button>
+
+                    <button class="camera-secondary-button" type="button">
+                        Details
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>

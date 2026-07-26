@@ -1,0 +1,163 @@
+@model List<NovaIntegration.Web.Models.Alert>
+
+@{
+    ViewData["Title"] = "Alerts";
+}
+
+<div class="alerts-page-header">
+    <div>
+        <h1>Security Alerts</h1>
+        <p>Review AI-generated security alerts and their current response status.</p>
+    </div>
+
+    <div class="alert-summary">
+        <span>Total: @Model.Count</span>
+        <span>Open: @Model.Count(alert => alert.Status == "Open")</span>
+        <span>High Priority: @Model.Count(alert => alert.Severity == "High")</span>
+    </div>
+</div>
+
+<div class="alert-filter-bar">
+    <input id="alertSearch"
+           type="search"
+           placeholder="Search camera, location or object..."
+           onkeyup="filterAlerts()" />
+
+    <select id="severityFilter" onchange="filterAlerts()">
+        <option value="">All severities</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+    </select>
+
+    <select id="statusFilter" onchange="filterAlerts()">
+        <option value="">All statuses</option>
+        <option value="open">Open</option>
+        <option value="acknowledged">Acknowledged</option>
+        <option value="resolved">Resolved</option>
+    </select>
+</div>
+
+<div class="alerts-table-card">
+    <div class="table-responsive">
+        <table class="table alerts-table" id="alertsTable">
+            <thead>
+                <tr>
+                    <th>Alert</th>
+                    <th>Camera and location</th>
+                    <th>Detection</th>
+                    <th>Confidence</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Detected</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var alert in Model)
+                {
+                    string severityClass = alert.Severity switch
+                    {
+                        "High" => "alert-severity-high",
+                        "Medium" => "alert-severity-medium",
+                        _ => "alert-severity-low"
+                    };
+
+                    string statusClass = alert.Status switch
+                    {
+                        "Open" => "alert-status-open",
+                        "Acknowledged" => "alert-status-acknowledged",
+                        _ => "alert-status-resolved"
+                    };
+
+                    <tr data-severity="@alert.Severity.ToLower()"
+                        data-status="@alert.Status.ToLower()">
+                        <td>
+                            <strong>#@alert.AlertId</strong>
+                            <small>@alert.AlertType</small>
+                        </td>
+
+                        <td>
+                            <strong>@alert.CameraName</strong>
+                            <small>@alert.Location</small>
+                        </td>
+
+                        <td>@alert.ObjectType</td>
+
+                        <td>@alert.Confidence.ToString("0.0")%</td>
+
+                        <td>
+                            <span class="alert-badge @severityClass">
+                                @alert.Severity
+                            </span>
+                        </td>
+
+                        <td>
+                            <span class="alert-badge @statusClass">
+                                @alert.Status
+                            </span>
+                        </td>
+
+                        <td>@alert.DetectedAt.ToString("dd MMM, h:mm tt")</td>
+
+                        <td>
+                            <button type="button" class="alert-action-button">
+                                Review
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div id="noAlertsMessage" class="no-alerts-message">
+        No alerts match the selected filters.
+    </div>
+</div>
+
+<script>
+    function filterAlerts() {
+        const searchValue =
+            document.getElementById("alertSearch").value.toLowerCase();
+
+        const severityValue =
+            document.getElementById("severityFilter").value;
+
+        const statusValue =
+            document.getElementById("statusFilter").value;
+
+        const rows =
+            document.querySelectorAll("#alertsTable tbody tr");
+
+        let visibleRows = 0;
+
+        rows.forEach(row => {
+            const rowText = row.innerText.toLowerCase();
+            const rowSeverity = row.dataset.severity;
+            const rowStatus = row.dataset.status;
+
+            const matchesSearch =
+                rowText.includes(searchValue);
+
+            const matchesSeverity =
+                severityValue === "" || rowSeverity === severityValue;
+
+            const matchesStatus =
+                statusValue === "" || rowStatus === statusValue;
+
+            const shouldShow =
+                matchesSearch && matchesSeverity && matchesStatus;
+
+            row.style.display = shouldShow ? "" : "none";
+
+            if (shouldShow) {
+                visibleRows++;
+            }
+        });
+
+        document.getElementById("noAlertsMessage").style.display =
+            visibleRows === 0 ? "block" : "none";
+    }
+</script>
