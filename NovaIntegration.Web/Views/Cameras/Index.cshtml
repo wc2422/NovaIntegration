@@ -1,73 +1,2215 @@
-@model List<NovaIntegration.Web.Models.Camera>
+﻿@model List<NovaIntegration.Web.Models.Camera>
 
 @{
     ViewData["Title"] = "Cameras";
+
+    int totalCameras = Model?.Count ?? 0;
+
+    int onlineCameras =
+        Model?.Count(camera =>
+            camera.Status.Equals(
+                "Online",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int offlineCameras =
+        Model?.Count(camera =>
+            camera.Status.Equals(
+                "Offline",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int maintenanceCameras =
+        Math.Max(
+            totalCameras - onlineCameras - offlineCameras,
+            0
+        );
+
+    double networkAvailability =
+        totalCameras > 0
+            ? onlineCameras * 100.0 / totalCameras
+            : 0;
 }
 
-<div class="camera-page-header">
-    <div>
-        <h1>Camera Monitoring</h1>
-        <p>View connected cameras, locations and current operating status.</p>
-    </div>
-
-    <div class="camera-summary">
-        <span>Total Cameras: @Model.Count</span>
-        <span>Online: @Model.Count(camera => camera.Status == "Online")</span>
-    </div>
-</div>
-
-<div class="camera-grid">
-    @foreach (var camera in Model)
-    {
-        string statusClass = camera.Status switch
-        {
-            "Online" => "camera-status-online",
-            "Offline" => "camera-status-offline",
-            _ => "camera-status-maintenance"
-        };
-
-        <div class="camera-card">
-            <div class="camera-preview">
-                <div class="camera-preview-icon">CAM</div>
-
-                <span class="camera-status-badge @statusClass">
-                    @camera.Status
-                </span>
-            </div>
-
-            <div class="camera-card-content">
-                <h2>@camera.CameraName</h2>
-
-                <div class="camera-detail-row">
-                    <span class="camera-detail-label">Location</span>
-                    <span>@camera.Location</span>
-                </div>
-
-                <div class="camera-detail-row">
-                    <span class="camera-detail-label">IP Address</span>
-                    <span>@camera.IpAddress</span>
-                </div>
-
-                <div class="camera-detail-row">
-                    <span class="camera-detail-label">Stream Type</span>
-                    <span>@camera.StreamType</span>
-                </div>
-
-                <div class="camera-detail-row">
-                    <span class="camera-detail-label">Last Activity</span>
-                    <span>@camera.LastActivity.ToString("dd MMM yyyy, h:mm tt")</span>
-                </div>
-
-                <div class="camera-card-actions">
-                    <button class="camera-primary-button" type="button">
-                        View Camera
-                    </button>
-
-                    <button class="camera-secondary-button" type="button">
-                        Details
-                    </button>
-                </div>
-            </div>
-        </div>
+<style>
+    .soc-cameras-page {
+        position: relative;
+        min-height: 100vh;
+        color: #dbeafe;
     }
+
+        .soc-cameras-page::before {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background: radial-gradient( circle at 12% 8%, rgba(14, 165, 233, 0.13), transparent 30% ), radial-gradient( circle at 90% 15%, rgba(59, 130, 246, 0.09), transparent 26% ), radial-gradient( circle at 50% 92%, rgba(6, 182, 212, 0.07), transparent 32% ), linear-gradient( 145deg, #050b14 0%, #08111f 48%, #050914 100% );
+            content: "";
+        }
+
+        .soc-cameras-page::after {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            opacity: 0.15;
+            background-image: linear-gradient( rgba(56, 189, 248, 0.07) 1px, transparent 1px ), linear-gradient( 90deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px );
+            background-size: 42px 42px;
+            content: "";
+            pointer-events: none;
+        }
+
+    .camera-command-header {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 18px;
+        padding: 25px;
+        overflow: hidden;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 18px;
+        background: linear-gradient( 135deg, rgba(15, 23, 42, 0.95), rgba(7, 15, 28, 0.94) );
+        box-shadow: 0 24px 65px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(18px);
+    }
+
+        .camera-command-header::before {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 220px;
+            height: 2px;
+            background: linear-gradient( 90deg, #22d3ee, transparent );
+            content: "";
+        }
+
+        .camera-command-header::after {
+            position: absolute;
+            top: -95px;
+            right: -70px;
+            width: 290px;
+            height: 290px;
+            border: 1px solid rgba(56, 189, 248, 0.08);
+            border-radius: 50%;
+            box-shadow: 0 0 0 42px rgba(56, 189, 248, 0.025), 0 0 0 84px rgba(56, 189, 248, 0.015);
+            content: "";
+        }
+
+    .camera-header-content,
+    .camera-header-actions {
+        position: relative;
+        z-index: 2;
+    }
+
+    .camera-page-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 9px;
+        color: #38bdf8;
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 1.9px;
+    }
+
+        .camera-page-eyebrow::before {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #22d3ee;
+            box-shadow: 0 0 13px rgba(34, 211, 238, 0.9);
+            content: "";
+        }
+
+    .camera-header-content h1 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: clamp(29px, 3vw, 40px);
+        font-weight: 850;
+        letter-spacing: -1px;
+    }
+
+    .camera-header-content p {
+        max-width: 720px;
+        margin: 9px 0 0;
+        color: #8196ac;
+        font-size: 13px;
+        line-height: 1.65;
+    }
+
+    .camera-command-indicators {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 18px;
+    }
+
+    .camera-command-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #6f849a;
+        font-size: 9px;
+        font-weight: 750;
+    }
+
+        .camera-command-indicator i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+    .indicator-green {
+        background: #22c55e;
+        box-shadow: 0 0 10px rgba(34, 197, 94, 0.75);
+    }
+
+    .indicator-blue {
+        background: #22d3ee;
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.75);
+    }
+
+    .indicator-purple {
+        background: #a855f7;
+        box-shadow: 0 0 10px rgba(168, 85, 247, 0.75);
+    }
+
+    .camera-header-actions {
+        display: flex;
+        min-width: 220px;
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .camera-system-clock {
+        padding: 13px 15px;
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        border-radius: 11px;
+        background: rgba(4, 10, 20, 0.55);
+        text-align: right;
+    }
+
+        .camera-system-clock span,
+        .camera-system-clock strong,
+        .camera-system-clock small {
+            display: block;
+        }
+
+        .camera-system-clock span {
+            color: #4f647b;
+            font-size: 7px;
+            font-weight: 850;
+            letter-spacing: 1.2px;
+        }
+
+        .camera-system-clock strong {
+            margin-top: 5px;
+            color: #7dd3fc;
+            font-family: Consolas, monospace;
+            font-size: 23px;
+            letter-spacing: 1px;
+            text-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+        }
+
+        .camera-system-clock small {
+            margin-top: 3px;
+            color: #52677e;
+            font-size: 8px;
+        }
+
+    .camera-refresh-button {
+        min-height: 42px;
+        border: 1px solid #0284c7;
+        border-radius: 10px;
+        background: linear-gradient( 135deg, #0284c7, #2563eb );
+        color: #ffffff;
+        font-size: 9px;
+        font-weight: 850;
+        cursor: pointer;
+        box-shadow: 0 10px 24px rgba(2, 132, 199, 0.25);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .camera-refresh-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 34px rgba(2, 132, 199, 0.35);
+        }
+
+    .camera-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .camera-summary-card {
+        position: relative;
+        min-width: 0;
+        padding: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(71, 85, 105, 0.38);
+        border-radius: 15px;
+        background: linear-gradient( 145deg, rgba(15, 23, 42, 0.94), rgba(7, 14, 26, 0.96) );
+        box-shadow: 0 15px 38px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .camera-summary-card:hover {
+            border-color: rgba(56, 189, 248, 0.35);
+            transform: translateY(-3px);
+            box-shadow: 0 19px 46px rgba(0, 0, 0, 0.3), 0 0 22px rgba(14, 165, 233, 0.05);
+        }
+
+        .camera-summary-card::after {
+            position: absolute;
+            top: -35px;
+            right: -35px;
+            width: 115px;
+            height: 115px;
+            border: 1px solid rgba(56, 189, 248, 0.045);
+            border-radius: 50%;
+            content: "";
+        }
+
+    .camera-summary-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .camera-summary-icon {
+        display: flex;
+        width: 42px;
+        height: 42px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid currentColor;
+        border-radius: 11px;
+        font-size: 15px;
+        font-weight: 900;
+    }
+
+    .summary-total-icon {
+        background: rgba(14, 165, 233, 0.1);
+        color: #38bdf8;
+    }
+
+    .summary-online-icon {
+        background: rgba(34, 197, 94, 0.1);
+        color: #4ade80;
+    }
+
+    .summary-offline-icon {
+        background: rgba(244, 63, 94, 0.1);
+        color: #fb7185;
+    }
+
+    .summary-health-icon {
+        background: rgba(168, 85, 247, 0.1);
+        color: #c084fc;
+    }
+
+    .camera-summary-chip {
+        padding: 4px 7px;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 12px;
+        background: rgba(14, 165, 233, 0.07);
+        color: #7dd3fc;
+        font-size: 6.5px;
+        font-weight: 900;
+        letter-spacing: 0.7px;
+    }
+
+    .camera-summary-card strong {
+        display: block;
+        margin-top: 17px;
+        color: #f8fafc;
+        font-size: 30px;
+        font-weight: 850;
+        line-height: 1;
+    }
+
+    .camera-summary-card h3 {
+        margin: 7px 0 0;
+        color: #8195aa;
+        font-size: 9px;
+        font-weight: 750;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+    }
+
+    .camera-summary-card p {
+        margin: 12px 0 0;
+        color: #50657b;
+        font-size: 8px;
+    }
+
+    .camera-health-track {
+        height: 4px;
+        margin-top: 9px;
+        overflow: hidden;
+        border-radius: 4px;
+        background: rgba(71, 85, 105, 0.35);
+    }
+
+    .camera-health-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient( 90deg, #06b6d4, #22c55e );
+        box-shadow: 0 0 10px rgba(34, 197, 94, 0.35);
+    }
+
+    .camera-control-panel {
+        position: relative;
+        margin-bottom: 18px;
+        padding: 16px 18px;
+        border: 1px solid rgba(51, 65, 85, 0.5);
+        border-radius: 15px;
+        background: linear-gradient( 145deg, rgba(12, 21, 36, 0.96), rgba(6, 13, 24, 0.97) );
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+        .camera-control-panel::before {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 95px;
+            height: 2px;
+            background: linear-gradient( 90deg, #22d3ee, transparent );
+            content: "";
+        }
+
+    .camera-controls {
+        display: grid;
+        grid-template-columns: minmax(240px, 1.5fr) minmax(150px, 0.55fr) minmax(150px, 0.55fr) auto;
+        gap: 10px;
+    }
+
+    .camera-search-box {
+        position: relative;
+    }
+
+        .camera-search-box span {
+            position: absolute;
+            top: 50%;
+            left: 13px;
+            color: #4e647d;
+            font-size: 15px;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .camera-search-box input,
+        .camera-controls select {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid rgba(71, 85, 105, 0.58);
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.84);
+            color: #94a3b8;
+            font-size: 9px;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .camera-search-box input {
+            padding: 8px 12px 8px 38px;
+        }
+
+    .camera-controls select {
+        padding: 8px 10px;
+    }
+
+    .camera-search-box input::placeholder {
+        color: #44566d;
+    }
+
+    .camera-search-box input:focus,
+    .camera-controls select:focus {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.08), 0 0 17px rgba(14, 165, 233, 0.05);
+    }
+
+    .camera-layout-button {
+        min-height: 40px;
+        padding: 8px 13px;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 8px;
+        background: rgba(14, 165, 233, 0.07);
+        color: #7dd3fc;
+        font-size: 9px;
+        font-weight: 850;
+        cursor: pointer;
+    }
+
+        .camera-layout-button:hover {
+            background: #0284c7;
+            color: #ffffff;
+        }
+
+    .soc-camera-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 15px;
+    }
+
+    .soc-camera-card {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid rgba(51, 65, 85, 0.52);
+        border-radius: 15px;
+        background: linear-gradient( 145deg, rgba(12, 21, 36, 0.97), rgba(6, 13, 24, 0.98) );
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .soc-camera-card:hover {
+            border-color: rgba(56, 189, 248, 0.42);
+            transform: translateY(-4px);
+            box-shadow: 0 24px 55px rgba(0, 0, 0, 0.34), 0 0 24px rgba(14, 165, 233, 0.06);
+        }
+
+    .soc-camera-preview {
+        position: relative;
+        height: 220px;
+        overflow: hidden;
+        background: radial-gradient( circle at 50% 55%, #1c334c, #07101c 70% );
+    }
+
+    .camera-preview-offline {
+        background: radial-gradient( circle at 50% 55%, #331b24, #10090f 72% );
+    }
+
+    .camera-preview-maintenance {
+        background: radial-gradient( circle at 50% 55%, #352c18, #120f08 72% );
+    }
+
+    .soc-preview-grid {
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient( rgba(56, 189, 248, 0.065) 1px, transparent 1px ), linear-gradient( 90deg, rgba(56, 189, 248, 0.065) 1px, transparent 1px );
+        background-size: 25px 25px;
+    }
+
+    .soc-camera-preview::before {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: linear-gradient( 180deg, rgba(255, 255, 255, 0.015), transparent 45%, rgba(0, 0, 0, 0.2) );
+        content: "";
+        pointer-events: none;
+    }
+
+    .soc-camera-topbar {
+        position: absolute;
+        top: 11px;
+        right: 11px;
+        left: 11px;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .soc-camera-id,
+    .soc-recording-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 7px;
+        border: 1px solid rgba(71, 85, 105, 0.42);
+        border-radius: 5px;
+        background: rgba(3, 8, 16, 0.72);
+        color: #7790a7;
+        font-family: Consolas, monospace;
+        font-size: 7px;
+        font-weight: 850;
+        letter-spacing: 0.5px;
+        backdrop-filter: blur(8px);
+    }
+
+    .soc-recording-label {
+        color: #fb7185;
+    }
+
+        .soc-recording-label i {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #f43f5e;
+            box-shadow: 0 0 9px rgba(244, 63, 94, 0.8);
+            animation: cameraRecordingPulse 1.4s infinite;
+        }
+
+    @@keyframes cameraRecordingPulse {
+        50% {
+            opacity: 0.35;
+        }
+    }
+
+    .soc-camera-focus {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        z-index: 3;
+        width: 92px;
+        height: 108px;
+        border: 1px solid #22d3ee;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 18px rgba(34, 211, 238, 0.18), inset 0 0 14px rgba(34, 211, 238, 0.03);
+    }
+
+        .soc-camera-focus::before,
+        .soc-camera-focus::after {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-color: #7dd3fc;
+            content: "";
+        }
+
+        .soc-camera-focus::before {
+            top: -2px;
+            left: -2px;
+            border-top: 3px solid;
+            border-left: 3px solid;
+        }
+
+        .soc-camera-focus::after {
+            right: -2px;
+            bottom: -2px;
+            border-right: 3px solid;
+            border-bottom: 3px solid;
+        }
+
+    .camera-offline-symbol,
+    .camera-maintenance-symbol {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        z-index: 4;
+        display: flex;
+        width: 76px;
+        height: 76px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 1px;
+    }
+
+    .camera-offline-symbol {
+        border: 1px solid rgba(244, 63, 94, 0.35);
+        background: rgba(244, 63, 94, 0.08);
+        color: #fb7185;
+        box-shadow: 0 0 24px rgba(244, 63, 94, 0.08);
+    }
+
+    .camera-maintenance-symbol {
+        border: 1px solid rgba(234, 179, 8, 0.35);
+        background: rgba(234, 179, 8, 0.08);
+        color: #facc15;
+        box-shadow: 0 0 24px rgba(234, 179, 8, 0.08);
+    }
+
+    .soc-camera-scan {
+        position: absolute;
+        right: 0;
+        left: 0;
+        z-index: 2;
+        height: 1px;
+        background: #22d3ee;
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.9);
+        animation: cameraScanMove 3.8s linear infinite;
+    }
+
+    @@keyframes cameraScanMove {
+        0% {
+            top: 17px;
+        }
+
+        50% {
+            top: 203px;
+        }
+
+        100% {
+            top: 17px;
+        }
+    }
+
+    .soc-camera-detection-label {
+        position: absolute;
+        top: calc(50% + 58px);
+        left: 50%;
+        z-index: 4;
+        padding: 4px 7px;
+        border: 1px solid rgba(34, 211, 238, 0.25);
+        border-radius: 4px;
+        background: rgba(3, 8, 16, 0.76);
+        color: #67e8f9;
+        font-family: Consolas, monospace;
+        font-size: 6px;
+        font-weight: 900;
+        letter-spacing: 0.7px;
+        transform: translateX(-50%);
+    }
+
+    .soc-camera-bottom-overlay {
+        position: absolute;
+        right: 11px;
+        bottom: 10px;
+        left: 11px;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .soc-camera-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        background: rgba(3, 8, 16, 0.76);
+        font-size: 7px;
+        font-weight: 900;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+    }
+
+        .soc-camera-status i {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+    .soc-status-online {
+        border-color: rgba(34, 197, 94, 0.25);
+        color: #4ade80;
+    }
+
+        .soc-status-online i {
+            background: #22c55e;
+            box-shadow: 0 0 9px rgba(34, 197, 94, 0.75);
+        }
+
+    .soc-status-offline {
+        border-color: rgba(244, 63, 94, 0.25);
+        color: #fb7185;
+    }
+
+        .soc-status-offline i {
+            background: #f43f5e;
+            box-shadow: 0 0 9px rgba(244, 63, 94, 0.75);
+        }
+
+    .soc-status-maintenance {
+        border-color: rgba(234, 179, 8, 0.25);
+        color: #facc15;
+    }
+
+        .soc-status-maintenance i {
+            background: #eab308;
+            box-shadow: 0 0 9px rgba(234, 179, 8, 0.75);
+        }
+
+    .camera-fps-label {
+        padding: 4px 6px;
+        border-radius: 4px;
+        background: rgba(3, 8, 16, 0.76);
+        color: #5f748a;
+        font-family: Consolas, monospace;
+        font-size: 6.5px;
+    }
+
+    .soc-camera-content {
+        padding: 16px;
+    }
+
+    .soc-camera-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding-bottom: 13px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.36);
+    }
+
+        .soc-camera-heading h2 {
+            margin: 0;
+            overflow: hidden;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 820;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .soc-camera-heading p {
+            margin: 4px 0 0;
+            color: #51667d;
+            font-size: 8px;
+        }
+
+    .camera-health-code {
+        padding: 5px 7px;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 11px;
+        background: rgba(14, 165, 233, 0.06);
+        color: #7dd3fc;
+        font-family: Consolas, monospace;
+        font-size: 6.5px;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+
+    .soc-camera-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+        margin-top: 13px;
+    }
+
+    .soc-camera-detail {
+        min-width: 0;
+        padding: 9px;
+        border: 1px solid rgba(51, 65, 85, 0.32);
+        border-radius: 8px;
+        background: rgba(7, 14, 25, 0.55);
+    }
+
+        .soc-camera-detail span,
+        .soc-camera-detail strong {
+            display: block;
+        }
+
+        .soc-camera-detail span {
+            color: #4f637a;
+            font-size: 6.5px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .soc-camera-detail strong {
+            margin-top: 5px;
+            overflow: hidden;
+            color: #aebed0;
+            font-size: 8px;
+            font-weight: 750;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .soc-camera-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .camera-metric {
+        padding: 8px;
+        border: 1px solid rgba(51, 65, 85, 0.3);
+        border-radius: 7px;
+        background: rgba(7, 14, 25, 0.45);
+        text-align: center;
+    }
+
+        .camera-metric strong,
+        .camera-metric span {
+            display: block;
+        }
+
+        .camera-metric strong {
+            color: #7dd3fc;
+            font-family: Consolas, monospace;
+            font-size: 9px;
+        }
+
+        .camera-metric span {
+            margin-top: 3px;
+            color: #4e6278;
+            font-size: 6px;
+            letter-spacing: 0.45px;
+            text-transform: uppercase;
+        }
+
+    .soc-camera-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+    .camera-view-button,
+    .camera-details-button,
+    .camera-menu-button {
+        min-height: 36px;
+        border-radius: 8px;
+        font-size: 8px;
+        font-weight: 850;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .camera-view-button {
+        border: 1px solid #0284c7;
+        background: linear-gradient( 135deg, #0284c7, #2563eb );
+        color: #ffffff;
+        box-shadow: 0 8px 20px rgba(2, 132, 199, 0.2);
+    }
+
+    .camera-details-button,
+    .camera-menu-button {
+        border: 1px solid rgba(71, 85, 105, 0.58);
+        background: rgba(15, 23, 42, 0.8);
+        color: #7c91a7;
+    }
+
+    .camera-menu-button {
+        width: 38px;
+        font-size: 14px;
+    }
+
+        .camera-view-button:hover,
+        .camera-details-button:hover,
+        .camera-menu-button:hover {
+            border-color: rgba(56, 189, 248, 0.48);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+        }
+
+    .camera-empty-state {
+        grid-column: 1 / -1;
+        padding: 70px 24px;
+        border: 1px solid rgba(51, 65, 85, 0.48);
+        border-radius: 16px;
+        background: linear-gradient( 145deg, rgba(12, 21, 36, 0.96), rgba(6, 13, 24, 0.97) );
+        text-align: center;
+    }
+
+    .camera-empty-icon {
+        display: flex;
+        width: 70px;
+        height: 70px;
+        margin: 0 auto;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(56, 189, 248, 0.24);
+        border-radius: 50%;
+        background: rgba(14, 165, 233, 0.06);
+        color: #7dd3fc;
+        font-size: 13px;
+        font-weight: 900;
+    }
+
+    .camera-empty-state h2 {
+        margin: 17px 0 0;
+        color: #dbeafe;
+        font-size: 17px;
+    }
+
+    .camera-empty-state p {
+        margin: 8px 0 0;
+        color: #53677e;
+        font-size: 10px;
+    }
+
+    .camera-toast {
+        position: fixed;
+        right: 25px;
+        bottom: 25px;
+        z-index: 5000;
+        display: flex;
+        min-width: 310px;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 15px;
+        border: 1px solid rgba(34, 197, 94, 0.28);
+        border-radius: 10px;
+        background: linear-gradient( 135deg, rgba(4, 47, 30, 0.96), rgba(6, 24, 30, 0.96) );
+        color: #bbf7d0;
+        font-size: 9px;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.42);
+        opacity: 0;
+        transform: translateY(20px);
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+        .camera-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+    .camera-toast-icon {
+        display: flex;
+        width: 25px;
+        height: 25px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #22c55e;
+        color: #ffffff;
+        box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+    }
+
+    .camera-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 6000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(1, 6, 15, 0.84);
+        backdrop-filter: blur(9px);
+    }
+
+        .camera-modal-overlay.show {
+            display: flex;
+        }
+
+    .camera-modal {
+        width: min(900px, 100%);
+        max-height: 90vh;
+        overflow-y: auto;
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        border-radius: 16px;
+        background: linear-gradient( 145deg, #0d1728, #070e19 );
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.62), 0 0 45px rgba(14, 165, 233, 0.06);
+    }
+
+    .camera-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.45);
+        background: linear-gradient( 90deg, rgba(14, 165, 233, 0.06), transparent );
+    }
+
+        .camera-modal-header span {
+            display: block;
+            margin-bottom: 4px;
+            color: #38bdf8;
+            font-size: 7px;
+            font-weight: 900;
+            letter-spacing: 1.2px;
+        }
+
+        .camera-modal-header h2 {
+            margin: 0;
+            color: #f1f5f9;
+            font-size: 18px;
+        }
+
+    .camera-modal-close {
+        width: 35px;
+        height: 35px;
+        border: 1px solid rgba(71, 85, 105, 0.55);
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.82);
+        color: #64748b;
+        font-size: 17px;
+        cursor: pointer;
+    }
+
+        .camera-modal-close:hover {
+            border-color: rgba(244, 63, 94, 0.35);
+            color: #fb7185;
+        }
+
+    .camera-modal-body {
+        padding: 20px;
+    }
+
+    .modal-live-preview {
+        position: relative;
+        height: 360px;
+        overflow: hidden;
+        border: 1px solid rgba(56, 189, 248, 0.38);
+        border-radius: 12px;
+        background: radial-gradient( circle at 50% 55%, #20364f, #060d17 72% );
+        box-shadow: inset 0 0 45px rgba(0, 0, 0, 0.55), 0 0 24px rgba(14, 165, 233, 0.06);
+    }
+
+        .modal-live-preview .soc-preview-grid {
+            background-size: 35px 35px;
+        }
+
+    .modal-camera-title {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        z-index: 4;
+        padding: 6px 9px;
+        border-radius: 5px;
+        background: rgba(3, 8, 16, 0.76);
+        color: #7dd3fc;
+        font-family: Consolas, monospace;
+        font-size: 8px;
+    }
+
+    .modal-camera-time {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        z-index: 4;
+        padding: 6px 9px;
+        border-radius: 5px;
+        background: rgba(3, 8, 16, 0.76);
+        color: #94a3b8;
+        font-family: Consolas, monospace;
+        font-size: 8px;
+    }
+
+    .modal-camera-focus {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        z-index: 3;
+        width: 150px;
+        height: 180px;
+        border: 1px solid #22d3ee;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 20px rgba(34, 211, 238, 0.2);
+    }
+
+    .modal-camera-scan {
+        position: absolute;
+        right: 0;
+        left: 0;
+        z-index: 2;
+        height: 1px;
+        background: #22d3ee;
+        box-shadow: 0 0 10px rgba(34, 211, 238, 0.9);
+        animation: modalCameraScan 4s linear infinite;
+    }
+
+    @@keyframes modalCameraScan {
+        0% {
+            top: 20px;
+        }
+
+        50% {
+            top: 340px;
+        }
+
+        100% {
+            top: 20px;
+        }
+    }
+
+    .camera-modal-details {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .camera-modal-detail {
+        padding: 11px;
+        border: 1px solid rgba(51, 65, 85, 0.42);
+        border-radius: 8px;
+        background: rgba(10, 19, 32, 0.78);
+    }
+
+        .camera-modal-detail span,
+        .camera-modal-detail strong {
+            display: block;
+        }
+
+        .camera-modal-detail span {
+            color: #52677f;
+            font-size: 7px;
+            text-transform: uppercase;
+        }
+
+        .camera-modal-detail strong {
+            margin-top: 5px;
+            overflow: hidden;
+            color: #cbd5e1;
+            font-size: 9px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    @@media (max-width: 1250px) {
+        .soc-camera-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .camera-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 850px) {
+        .camera-command-header {
+            flex-direction: column;
+        }
+
+        .camera-header-actions {
+            width: 100%;
+        }
+
+        .camera-controls {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .camera-search-box {
+            grid-column: span 2;
+        }
+
+        .camera-modal-details {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 650px) {
+        .camera-summary-grid,
+        .soc-camera-grid,
+        .camera-controls {
+            grid-template-columns: 1fr;
+        }
+
+        .camera-search-box {
+            grid-column: span 1;
+        }
+
+        .camera-command-indicators {
+            flex-direction: column;
+            gap: 9px;
+        }
+
+        .soc-camera-actions {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .camera-menu-button {
+            grid-column: span 2;
+            width: 100%;
+        }
+
+        .camera-modal-details {
+            grid-template-columns: 1fr;
+        }
+
+        .modal-live-preview {
+            height: 260px;
+        }
+
+        .camera-toast {
+            right: 14px;
+            bottom: 14px;
+            left: 14px;
+            min-width: 0;
+        }
+    }
+</style>
+
+<section class="soc-cameras-page">
+
+    <header class="camera-command-header">
+
+        <div class="camera-header-content">
+
+            <span class="camera-page-eyebrow">
+                NOVA VIDEO SURVEILLANCE NETWORK
+            </span>
+
+            <h1>Camera Command Centre</h1>
+
+            <p>
+                Monitor connected security cameras, live stream health,
+                network availability and AI-assisted video analysis.
+            </p>
+
+            <div class="camera-command-indicators">
+
+                <span class="camera-command-indicator">
+                    <i class="indicator-green"></i>
+                    Camera network connected
+                </span>
+
+                <span class="camera-command-indicator">
+                    <i class="indicator-blue"></i>
+                    AI video analytics active
+                </span>
+
+                <span class="camera-command-indicator">
+                    <i class="indicator-purple"></i>
+                    Secure RTSP communication
+                </span>
+
+            </div>
+
+        </div>
+
+        <div class="camera-header-actions">
+
+            <div class="camera-system-clock">
+
+                <span>CAMERA NETWORK TIME</span>
+
+                <strong id="cameraSystemClock">
+                    @DateTime.Now.ToString("HH:mm:ss")
+                </strong>
+
+                <small>
+                    @DateTime.Now.ToString("dddd, dd MMM yyyy")
+                </small>
+
+            </div>
+
+            <button type="button"
+                    class="camera-refresh-button"
+                    onclick="refreshCameraNetwork()">
+                ↻ Refresh camera network
+            </button>
+
+        </div>
+
+    </header>
+
+    <section class="camera-summary-grid">
+
+        <article class="camera-summary-card">
+
+            <div class="camera-summary-top">
+
+                <div class="camera-summary-icon summary-total-icon">
+                    CAM
+                </div>
+
+                <span class="camera-summary-chip">
+                    NETWORK
+                </span>
+
+            </div>
+
+            <strong>@totalCameras</strong>
+
+            <h3>Total cameras</h3>
+
+            <p>
+                All registered surveillance endpoints
+            </p>
+
+            <div class="camera-health-track">
+                <div class="camera-health-fill"
+                     style="width: 100%">
+                </div>
+            </div>
+
+        </article>
+
+        <article class="camera-summary-card">
+
+            <div class="camera-summary-top">
+
+                <div class="camera-summary-icon summary-online-icon">
+                    ✓
+                </div>
+
+                <span class="camera-summary-chip">
+                    ACTIVE
+                </span>
+
+            </div>
+
+            <strong>@onlineCameras</strong>
+
+            <h3>Online cameras</h3>
+
+            <p>
+                Currently transmitting live video
+            </p>
+
+            <div class="camera-health-track">
+                <div class="camera-health-fill"
+                     style="width: @networkAvailability.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%">
+                </div>
+            </div>
+
+        </article>
+
+        <article class="camera-summary-card">
+
+            <div class="camera-summary-top">
+
+                <div class="camera-summary-icon summary-offline-icon">
+                    !
+                </div>
+
+                <span class="camera-summary-chip">
+                    REVIEW
+                </span>
+
+            </div>
+
+            <strong>@offlineCameras</strong>
+
+            <h3>Offline cameras</h3>
+
+            <p>
+                Cameras requiring connection review
+            </p>
+
+            <div class="camera-health-track">
+                <div class="camera-health-fill"
+                     style="width: @(offlineCameras > 0 ? "38" : "100")%">
+                </div>
+            </div>
+
+        </article>
+
+        <article class="camera-summary-card">
+
+            <div class="camera-summary-top">
+
+                <div class="camera-summary-icon summary-health-icon">
+                    %
+                </div>
+
+                <span class="camera-summary-chip">
+                    HEALTH
+                </span>
+
+            </div>
+
+            <strong>
+                @networkAvailability.ToString("0.0")%
+            </strong>
+
+            <h3>Network availability</h3>
+
+            <p>
+                @maintenanceCameras cameras currently under maintenance
+            </p>
+
+            <div class="camera-health-track">
+                <div class="camera-health-fill"
+                     style="width: @networkAvailability.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%">
+                </div>
+            </div>
+
+        </article>
+
+    </section>
+
+    <section class="camera-control-panel">
+
+        <div class="camera-controls">
+
+            <div class="camera-search-box">
+
+                <span>⌕</span>
+
+                <input id="cameraSearchInput"
+                       type="text"
+                       placeholder="Search camera, location or IP address..."
+                       oninput="filterCameras()" />
+
+            </div>
+
+            <select id="cameraStatusFilter"
+                    onchange="filterCameras()">
+
+                <option value="all">
+                    All statuses
+                </option>
+
+                <option value="online">
+                    Online
+                </option>
+
+                <option value="offline">
+                    Offline
+                </option>
+
+                <option value="maintenance">
+                    Maintenance
+                </option>
+
+            </select>
+
+            <select id="cameraStreamFilter"
+                    onchange="filterCameras()">
+
+                <option value="all">
+                    All stream types
+                </option>
+
+                @foreach (
+                                string streamType
+                                in Model
+                                .Select(camera => camera.StreamType)
+                                .Where(streamType =>
+                                !string.IsNullOrWhiteSpace(streamType)
+                                )
+                                .Distinct()
+                                )
+                {
+                    <option value="@streamType.ToLower()">
+                        @streamType
+                    </option>
+                }
+
+            </select>
+
+            <button type="button"
+                    class="camera-layout-button"
+                    onclick="resetCameraFilters()">
+                Clear filters
+            </button>
+
+        </div>
+
+    </section>
+
+    <section id="cameraGrid"
+             class="soc-camera-grid">
+
+        @if (Model.Count == 0)
+        {
+            <div class="camera-empty-state">
+
+                <div class="camera-empty-icon">
+                    CAM
+                </div>
+
+                <h2>No cameras registered</h2>
+
+                <p>
+                    Camera endpoints will appear here after they are
+                    connected to NovaIntegration.
+                </p>
+
+            </div>
+        }
+        else
+        {
+            int cameraIndex = 0;
+
+            foreach (var camera in Model)
+            {
+                cameraIndex++;
+
+                bool isOnline =
+                camera.Status.Equals(
+                "Online",
+                StringComparison.OrdinalIgnoreCase
+                );
+
+                bool isOffline =
+                camera.Status.Equals(
+                "Offline",
+                StringComparison.OrdinalIgnoreCase
+                );
+
+                string statusKey =
+                isOnline
+                ? "online"
+                : isOffline
+                ? "offline"
+                : "maintenance";
+
+                string statusClass =
+                isOnline
+                ? "soc-status-online"
+                : isOffline
+                ? "soc-status-offline"
+                : "soc-status-maintenance";
+
+                string previewClass =
+                isOnline
+                ? ""
+                : isOffline
+                ? "camera-preview-offline"
+                : "camera-preview-maintenance";
+
+                string cameraCode =
+                $"CAM-{cameraIndex.ToString("000")}";
+
+                string fps =
+                isOnline
+                ? $"{24 + cameraIndex % 7} FPS"
+                : "0 FPS";
+
+                string resolution =
+                cameraIndex % 2 == 0
+                ? "1920 × 1080"
+                : "2560 × 1440";
+
+                string signalStrength =
+                isOnline
+                ? $"{91 + cameraIndex % 8}%"
+                : isOffline
+                ? "0%"
+                : "42%";
+
+                <article class="soc-camera-card"
+                         data-camera-name="@camera.CameraName.ToLower()"
+                         data-camera-location="@camera.Location.ToLower()"
+                         data-camera-ip="@camera.IpAddress.ToLower()"
+                         data-camera-status="@statusKey"
+                         data-camera-stream="@camera.StreamType.ToLower()">
+
+                    <div class="soc-camera-preview @previewClass">
+
+                        <div class="soc-preview-grid"></div>
+
+                        <div class="soc-camera-topbar">
+
+                            <span class="soc-camera-id">
+                                @cameraCode
+                            </span>
+
+                            @if (isOnline)
+                            {
+                                <span class="soc-recording-label">
+                                    <i></i>
+                                    REC
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="soc-camera-id">
+                                    NO SIGNAL
+                                </span>
+                            }
+
+                        </div>
+
+                        @if (isOnline)
+                        {
+                            <div class="soc-camera-focus"></div>
+
+                            <div class="soc-camera-scan"></div>
+
+                            <span class="soc-camera-detection-label">
+                                AI TARGET ANALYSIS
+                            </span>
+                        }
+                        else if (isOffline)
+                        {
+                            <div class="camera-offline-symbol">
+                                OFFLINE
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="camera-maintenance-symbol">
+                                SERVICE
+                            </div>
+                        }
+
+                        <div class="soc-camera-bottom-overlay">
+
+                            <span class="soc-camera-status @statusClass">
+                                <i></i>
+                                @camera.Status
+                            </span>
+
+                            <span class="camera-fps-label">
+                                @fps
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                    <div class="soc-camera-content">
+
+                        <div class="soc-camera-heading">
+
+                            <div>
+                                <h2>@camera.CameraName</h2>
+
+                                <p>@camera.Location</p>
+                            </div>
+
+                            <span class="camera-health-code">
+                                @cameraCode
+                            </span>
+
+                        </div>
+
+                        <div class="soc-camera-details">
+
+                            <div class="soc-camera-detail">
+
+                                <span>IP address</span>
+
+                                <strong>
+                                    @camera.IpAddress
+                                </strong>
+
+                            </div>
+
+                            <div class="soc-camera-detail">
+
+                                <span>Stream type</span>
+
+                                <strong>
+                                    @camera.StreamType
+                                </strong>
+
+                            </div>
+
+                            <div class="soc-camera-detail">
+
+                                <span>Resolution</span>
+
+                                <strong>
+                                    @resolution
+                                </strong>
+
+                            </div>
+
+                            <div class="soc-camera-detail">
+
+                                <span>Last activity</span>
+
+                                <strong>
+                                    @camera.LastActivity.ToString(
+                                    "dd MMM, HH:mm"
+                                                        )
+                        </strong>
+
+                    </div>
+
+                </div>
+
+                <div class="soc-camera-metrics">
+
+                    <div class="camera-metric">
+
+                        <strong>@fps</strong>
+
+                        <span>Frame rate</span>
+
+                    </div>
+
+                    <div class="camera-metric">
+
+                        <strong>@signalStrength</strong>
+
+                        <span>Signal</span>
+
+                    </div>
+
+                    <div class="camera-metric">
+
+                        <strong>
+                            @(isOnline ? "ACTIVE" : "IDLE")
+                        </strong>
+
+                        <span>AI engine</span>
+
+                    </div>
+
+                </div>
+
+                <div class="soc-camera-actions">
+
+                    <button type="button"
+                            class="camera-view-button"
+                            onclick="openCameraModal(
+                                        '@Html.Raw(
+                                                                        System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(
+                                                                            camera.CameraName
+                                                                        )
+                                                                    )',
+                                        '@Html.Raw(
+                                                                        System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(
+                                                                            camera.Location
+                                                                        )
+                                                                    )',
+                                        '@Html.Raw(
+                                                                        System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(
+                                                                            camera.IpAddress
+                                                                        )
+                                                                    )',
+                                        '@Html.Raw(
+                                                                        System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(
+                                                                            camera.StreamType
+                                                                        )
+                                                                    )',
+                                        '@Html.Raw(
+                                                                        System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(
+                                                                            camera.Status
+                                                                        )
+                                                                    )',
+                                        '@resolution',
+                                        '@fps'
+                                    )">
+                        View live feed
+                    </button>
+
+                            <button type="button"
+                                    class="camera-details-button"
+                                    onclick="showCameraToast(
+                                                '@Html.Raw(
+                                                                        System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(
+                                                                            camera.CameraName
+                                                                        )
+                                                                    ) details loaded successfully.'
+                                    )">
+                        Diagnostics
+                    </button>
+
+                            <button type="button"
+                                    class="camera-menu-button"
+                                    onclick="showCameraToast(
+                                                'Camera command menu opened.'
+                                            )">
+                                ⋮
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </article>
+                }
+        }
+
+    </section>
+
+</section>
+
+<div id="cameraToast"
+     class="camera-toast">
+
+    <span class="camera-toast-icon">
+        ✓
+    </span>
+
+    <strong id="cameraToastMessage">
+        Camera network refreshed successfully.
+    </strong>
+
 </div>
+
+<div id="cameraModalOverlay"
+     class="camera-modal-overlay"
+     onclick="closeCameraModalFromOverlay(event)">
+
+    <div class="camera-modal">
+
+        <header class="camera-modal-header">
+
+            <div>
+
+                <span>
+                    LIVE CAMERA INVESTIGATION
+                </span>
+
+                <h2 id="cameraModalTitle">
+                    Camera feed
+                </h2>
+
+            </div>
+
+            <button type="button"
+                    class="camera-modal-close"
+                    onclick="closeCameraModal()">
+                ×
+            </button>
+
+        </header>
+
+        <div class="camera-modal-body">
+
+            <div class="modal-live-preview">
+
+                <div class="soc-preview-grid"></div>
+
+                <span id="modalCameraName"
+                      class="modal-camera-title">
+                    CAMERA
+                </span>
+
+                <span id="modalCameraTime"
+                      class="modal-camera-time">
+                    @DateTime.Now.ToString("HH:mm:ss")
+                </span>
+
+                <div class="modal-camera-focus"></div>
+
+                <div class="modal-camera-scan"></div>
+
+            </div>
+
+            <div class="camera-modal-details">
+
+                <div class="camera-modal-detail">
+
+                    <span>Location</span>
+
+                    <strong id="modalCameraLocation">
+                        -
+                    </strong>
+
+                </div>
+
+                <div class="camera-modal-detail">
+
+                    <span>IP address</span>
+
+                    <strong id="modalCameraIp">
+                        -
+                    </strong>
+
+                </div>
+
+                <div class="camera-modal-detail">
+
+                    <span>Stream type</span>
+
+                    <strong id="modalCameraStream">
+                        -
+                    </strong>
+
+                </div>
+
+                <div class="camera-modal-detail">
+
+                    <span>Status</span>
+
+                    <strong id="modalCameraStatus">
+                        -
+                    </strong>
+
+                </div>
+
+                <div class="camera-modal-detail">
+
+                    <span>Resolution</span>
+
+                    <strong id="modalCameraResolution">
+                        -
+                    </strong>
+
+                </div>
+
+                <div class="camera-modal-detail">
+
+                    <span>Frame rate</span>
+
+                    <strong id="modalCameraFps">
+                        -
+                    </strong>
+
+                </div>
+
+                <div class="camera-modal-detail">
+
+                    <span>AI analysis</span>
+
+                    <strong>
+                        YOLO ACTIVE
+                    </strong>
+
+                </div>
+
+                <div class="camera-modal-detail">
+
+                    <span>Connection</span>
+
+                    <strong>
+                        ENCRYPTED
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    document.addEventListener(
+        "DOMContentLoaded",
+        function () {
+            updateCameraClock();
+
+            window.setInterval(
+                updateCameraClock,
+                1000
+            );
+        }
+    );
+
+    function updateCameraClock() {
+        const now = new Date();
+
+        const systemClock =
+            document.getElementById(
+                "cameraSystemClock"
+            );
+
+        const modalClock =
+            document.getElementById(
+                "modalCameraTime"
+            );
+
+        const currentTime =
+            now.toLocaleTimeString(
+                [],
+                {
+                    hour12: false
+                }
+            );
+
+        if (systemClock) {
+            systemClock.textContent =
+                currentTime;
+        }
+
+        if (modalClock) {
+            modalClock.textContent =
+                currentTime;
+        }
+    }
+
+    function filterCameras() {
+        const searchValue =
+            document
+                .getElementById(
+                    "cameraSearchInput"
+                )
+                .value
+                .trim()
+                .toLowerCase();
+
+        const statusValue =
+            document
+                .getElementById(
+                    "cameraStatusFilter"
+                )
+                .value
+                .toLowerCase();
+
+        const streamValue =
+            document
+                .getElementById(
+                    "cameraStreamFilter"
+                )
+                .value
+                .toLowerCase();
+
+        const cards =
+            document.querySelectorAll(
+                ".soc-camera-card"
+            );
+
+        cards.forEach(
+            function (card) {
+                const searchableText =
+                    [
+                        card.dataset.cameraName,
+                        card.dataset.cameraLocation,
+                        card.dataset.cameraIp
+                    ]
+                        .join(" ")
+                        .toLowerCase();
+
+                const matchesSearch =
+                    searchableText.includes(
+                        searchValue
+                    );
+
+                const matchesStatus =
+                    statusValue === "all" ||
+                    card.dataset.cameraStatus ===
+                    statusValue;
+
+                const matchesStream =
+                    streamValue === "all" ||
+                    card.dataset.cameraStream ===
+                    streamValue;
+
+                card.style.display =
+                    matchesSearch &&
+                    matchesStatus &&
+                    matchesStream
+                        ? ""
+                        : "none";
+            }
+        );
+    }
+
+    function resetCameraFilters() {
+        document.getElementById(
+            "cameraSearchInput"
+        ).value = "";
+
+        document.getElementById(
+            "cameraStatusFilter"
+        ).value = "all";
+
+        document.getElementById(
+            "cameraStreamFilter"
+        ).value = "all";
+
+        filterCameras();
+
+        showCameraToast(
+            "Camera filters cleared."
+        );
+    }
+
+    function refreshCameraNetwork() {
+        const button =
+            document.querySelector(
+                ".camera-refresh-button"
+            );
+
+        button.disabled = true;
+        button.textContent =
+            "Scanning camera network...";
+
+        window.setTimeout(
+            function () {
+                button.disabled = false;
+                button.textContent =
+                    "↻ Refresh camera network";
+
+                showCameraToast(
+                    "Camera network scan completed successfully."
+                );
+            },
+            900
+        );
+    }
+
+    function openCameraModal(
+        name,
+        location,
+        ipAddress,
+        streamType,
+        status,
+        resolution,
+        fps
+    ) {
+        document.getElementById(
+            "cameraModalTitle"
+        ).textContent =
+            name + " — Live Feed";
+
+        document.getElementById(
+            "modalCameraName"
+        ).textContent =
+            name.toUpperCase();
+
+        document.getElementById(
+            "modalCameraLocation"
+        ).textContent =
+            location;
+
+        document.getElementById(
+            "modalCameraIp"
+        ).textContent =
+            ipAddress;
+
+        document.getElementById(
+            "modalCameraStream"
+        ).textContent =
+            streamType;
+
+        document.getElementById(
+            "modalCameraStatus"
+        ).textContent =
+            status;
+
+        document.getElementById(
+            "modalCameraResolution"
+        ).textContent =
+            resolution;
+
+        document.getElementById(
+            "modalCameraFps"
+        ).textContent =
+            fps;
+
+        document.getElementById(
+            "cameraModalOverlay"
+        ).classList.add("show");
+
+        document.body.style.overflow =
+            "hidden";
+    }
+
+    function closeCameraModal() {
+        document.getElementById(
+            "cameraModalOverlay"
+        ).classList.remove("show");
+
+        document.body.style.overflow =
+            "";
+    }
+
+    function closeCameraModalFromOverlay(
+        event
+    ) {
+        if (
+            event.target.id ===
+            "cameraModalOverlay"
+        ) {
+            closeCameraModal();
+        }
+    }
+
+    function showCameraToast(message) {
+        const toast =
+            document.getElementById(
+                "cameraToast"
+            );
+
+        document.getElementById(
+            "cameraToastMessage"
+        ).textContent =
+            message;
+
+        toast.classList.add("show");
+
+        window.setTimeout(
+            function () {
+                toast.classList.remove(
+                    "show"
+                );
+            },
+            3000
+        );
+    }
+
+    document.addEventListener(
+        "keydown",
+        function (event) {
+            if (event.key === "Escape") {
+                closeCameraModal();
+            }
+        }
+    );
+</script>

@@ -1,146 +1,3231 @@
-@model List<NovaIntegration.Web.Models.Detection>
+﻿@model List<NovaIntegration.Web.Models.Detection>
+
+@using System.Globalization
 
 @{
     ViewData["Title"] = "Detection Logs";
+
+    int totalCount = Model?.Count ?? 0;
+
+    int criticalCount =
+        Model?.Count(detection =>
+            string.Equals(
+                detection.Severity,
+                "Critical",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int highCount =
+        Model?.Count(detection =>
+            string.Equals(
+                detection.Severity,
+                "High",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int mediumCount =
+        Model?.Count(detection =>
+            string.Equals(
+                detection.Severity,
+                "Medium",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int lowCount =
+        Model?.Count(detection =>
+            string.Equals(
+                detection.Severity,
+                "Low",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int pendingCount =
+        Model?.Count(detection =>
+            string.Equals(
+                detection.Status,
+                "Pending",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int escalatedCount =
+        Model?.Count(detection =>
+            string.Equals(
+                detection.Status,
+                "Escalated",
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? 0;
+
+    int todayCount =
+        Model?.Count(detection =>
+            detection.DetectedAt.Date == DateTime.Today
+        ) ?? 0;
+
+    double averageConfidence =
+        totalCount > 0
+            ? Model.Average(detection => detection.Confidence)
+            : 0;
+
+    double criticalPercentage =
+        totalCount > 0
+            ? criticalCount * 100.0 / totalCount
+            : 0;
+
+    double highPercentage =
+        totalCount > 0
+            ? highCount * 100.0 / totalCount
+            : 0;
+
+    double mediumPercentage =
+        totalCount > 0
+            ? mediumCount * 100.0 / totalCount
+            : 0;
+
+    double criticalEnd = criticalPercentage;
+
+    double highEnd =
+        criticalPercentage +
+        highPercentage;
+
+    double mediumEnd =
+        criticalPercentage +
+        highPercentage +
+        mediumPercentage;
+
+    string criticalEndCss =
+        criticalEnd.ToString(
+            "0.##",
+            CultureInfo.InvariantCulture
+        );
+
+    string highEndCss =
+        highEnd.ToString(
+            "0.##",
+            CultureInfo.InvariantCulture
+        );
+
+    string mediumEndCss =
+        mediumEnd.ToString(
+            "0.##",
+            CultureInfo.InvariantCulture
+        );
 }
 
-<div class="detection-page-header">
-    <div>
-        <h1>Detection Logs</h1>
-        <p>Review AI-generated object detection records from connected cameras.</p>
-    </div>
+<style>
+    .advanced-logs-page {
+        position: relative;
+        min-height: 100vh;
+        color: #dbeafe;
+    }
 
-    <div class="detection-summary">
-        <span>Total Records: @Model.Count</span>
-        <span>
-            Today:
-            @Model.Count(detection => detection.DetectedAt.Date == DateTime.Today)
-        </span>
-    </div>
-</div>
+        .advanced-logs-page::before {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            content: "";
+            background: radial-gradient( circle at 10% 8%, rgba(14, 165, 233, 0.14), transparent 30% ), radial-gradient( circle at 90% 12%, rgba(168, 85, 247, 0.1), transparent 27% ), radial-gradient( circle at 50% 92%, rgba(244, 63, 94, 0.07), transparent 30% ), linear-gradient( 145deg, #050b14 0%, #08111f 48%, #050914 100% );
+        }
 
-<div class="detection-filter-bar">
-    <input id="detectionSearch"
-           type="search"
-           placeholder="Search camera, location, alert or object..."
-           onkeyup="filterDetections()" />
+        .advanced-logs-page::after {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            content: "";
+            opacity: 0.15;
+            pointer-events: none;
+            background-image: linear-gradient( rgba(56, 189, 248, 0.07) 1px, transparent 1px ), linear-gradient( 90deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px );
+            background-size: 42px 42px;
+        }
 
-    <select id="objectFilter" onchange="filterDetections()">
-        <option value="">All Objects</option>
-        <option value="person">Person</option>
-        <option value="vehicle">Vehicle</option>
-        <option value="package">Package</option>
-    </select>
-</div>
+    .logs-page-heading,
+    .logs-status-banner,
+    .logs-panel {
+        border: 1px solid rgba(51, 65, 85, 0.55);
+        background: linear-gradient( 145deg, rgba(12, 21, 36, 0.97), rgba(6, 13, 24, 0.98) );
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(16px);
+    }
 
-<div class="detection-table-card">
-    <div class="table-responsive">
-        <table class="table detection-table" id="detectionTable">
-            <thead>
-                <tr>
-                    <th>Detection ID</th>
-                    <th>Camera</th>
-                    <th>Location</th>
-                    <th>Object</th>
-                    <th>Confidence</th>
-                    <th>Alert Type</th>
-                    <th>Detected At</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
+    .logs-page-heading {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 14px;
+        padding: 25px;
+        overflow: hidden;
+        border-radius: 18px;
+    }
 
-            <tbody>
-                @foreach (var detection in Model)
+        .logs-page-heading::before,
+        .logs-panel::before {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 120px;
+            height: 2px;
+            content: "";
+            background: linear-gradient( 90deg, #22d3ee, transparent );
+        }
+
+    .page-eyebrow,
+    .panel-eyebrow,
+    .modal-eyebrow {
+        display: block;
+        color: #38bdf8;
+        font-size: 8px;
+        font-weight: 900;
+        letter-spacing: 1.5px;
+    }
+
+    .logs-page-heading h1 {
+        margin: 7px 0 0;
+        color: #f8fafc;
+        font-size: clamp(30px, 3vw, 40px);
+        font-weight: 850;
+        letter-spacing: -1px;
+    }
+
+    .logs-page-heading p {
+        max-width: 720px;
+        margin: 9px 0 0;
+        color: #8196ac;
+        font-size: 13px;
+        line-height: 1.65;
+    }
+
+    .logs-heading-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .primary-action-button,
+    .secondary-action-button,
+    .clear-filter-button,
+    .view-detection-button,
+    .pagination-button,
+    .page-number-button,
+    .modal-close-button {
+        min-height: 38px;
+        border-radius: 8px;
+        font-size: 8px;
+        font-weight: 850;
+        cursor: pointer;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .primary-action-button {
+        padding: 9px 14px;
+        border: 1px solid #0284c7;
+        background: linear-gradient( 135deg, #0284c7, #2563eb );
+        color: #ffffff;
+        box-shadow: 0 9px 22px rgba(2, 132, 199, 0.23);
+    }
+
+    .secondary-action-button {
+        padding: 9px 14px;
+        border: 1px solid rgba(71, 85, 105, 0.62);
+        background: rgba(15, 23, 42, 0.82);
+        color: #8da2b8;
+    }
+
+        .primary-action-button:hover,
+        .secondary-action-button:hover,
+        .view-detection-button:hover,
+        .pagination-button:hover,
+        .page-number-button:hover {
+            border-color: rgba(56, 189, 248, 0.55);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+        }
+
+    .logs-status-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+        padding: 14px 18px;
+        border-radius: 13px;
+    }
+
+    .logs-status-left {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .logs-live-indicator {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #22c55e;
+        box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
+        animation: logsPulse 1.5s infinite;
+    }
+
+    @@keyframes logsPulse {
+        50% {
+            opacity: 0.35;
+        }
+    }
+
+    .logs-status-left strong,
+    .logs-status-left small {
+        display: block;
+    }
+
+    .logs-status-left strong {
+        color: #dbeafe;
+        font-size: 9px;
+    }
+
+    .logs-status-left small {
+        margin-top: 4px;
+        color: #587087;
+        font-size: 7px;
+    }
+
+    .logs-system-health {
+        text-align: right;
+    }
+
+        .logs-system-health span,
+        .logs-system-health strong {
+            display: block;
+        }
+
+        .logs-system-health span {
+            color: #587087;
+            font-size: 7px;
+        }
+
+        .logs-system-health strong {
+            margin-top: 3px;
+            color: #4ade80;
+            font-family: Consolas, monospace;
+            font-size: 16px;
+        }
+
+    .logs-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    .logs-summary-card {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 13px;
+        padding: 17px;
+        border: 1px solid rgba(71, 85, 105, 0.4);
+        border-radius: 14px;
+        background: linear-gradient( 145deg, rgba(15, 23, 42, 0.94), rgba(7, 14, 26, 0.96) );
+        box-shadow: 0 15px 38px rgba(0, 0, 0, 0.23);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+        .logs-summary-card:hover {
+            border-color: rgba(56, 189, 248, 0.35);
+            transform: translateY(-3px);
+        }
+
+    .summary-card-icon {
+        display: flex;
+        width: 43px;
+        height: 43px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid currentColor;
+        border-radius: 11px;
+        font-size: 16px;
+        font-weight: 900;
+    }
+
+    .summary-icon-blue {
+        color: #38bdf8;
+        background: rgba(14, 165, 233, 0.09);
+    }
+
+    .summary-icon-red {
+        color: #fb7185;
+        background: rgba(244, 63, 94, 0.09);
+    }
+
+    .summary-icon-orange {
+        color: #fb923c;
+        background: rgba(249, 115, 22, 0.09);
+    }
+
+    .summary-icon-green {
+        color: #4ade80;
+        background: rgba(34, 197, 94, 0.09);
+    }
+
+    .summary-card-content span,
+    .summary-card-content strong,
+    .summary-card-content small {
+        display: block;
+    }
+
+    .summary-card-content span {
+        color: #7f94aa;
+        font-size: 8px;
+        font-weight: 750;
+        text-transform: uppercase;
+    }
+
+    .summary-card-content strong {
+        margin-top: 6px;
+        color: #f8fafc;
+        font-size: 27px;
+        line-height: 1;
+    }
+
+    .summary-card-content small {
+        margin-top: 6px;
+        color: #4f657b;
+        font-size: 7px;
+    }
+
+    .logs-intelligence-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.7fr);
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    .logs-panel {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        border-radius: 16px;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 17px 18px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.38);
+    }
+
+        .panel-header h2 {
+            margin: 5px 0 0;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+
+    .live-label,
+    .record-count-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 8px;
+        border: 1px solid rgba(34, 197, 94, 0.22);
+        border-radius: 12px;
+        background: rgba(34, 197, 94, 0.06);
+        color: #4ade80;
+        font-size: 6.5px;
+        font-weight: 900;
+    }
+
+    .risk-layout {
+        display: grid;
+        grid-template-columns: 170px minmax(0, 1fr);
+        align-items: center;
+        gap: 20px;
+        padding: 25px;
+    }
+
+    .risk-donut {
+        position: relative;
+        display: grid;
+        width: 160px;
+        height: 160px;
+        place-items: center;
+        border-radius: 50%;
+        background: conic-gradient( #f43f5e 0 var(--critical), #f97316 var(--critical) var(--high), #eab308 var(--high) var(--medium), #22c55e var(--medium) 100% );
+        box-shadow: 0 0 35px rgba(14, 165, 233, 0.07);
+    }
+
+        .risk-donut::before {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            content: "";
+            background: #08111f;
+            box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.5);
+        }
+
+    .risk-donut-centre {
+        position: absolute;
+        text-align: center;
+    }
+
+        .risk-donut-centre strong,
+        .risk-donut-centre span {
+            display: block;
+        }
+
+        .risk-donut-centre strong {
+            color: #f8fafc;
+            font-size: 28px;
+        }
+
+        .risk-donut-centre span {
+            color: #597087;
+            font-size: 7px;
+            text-transform: uppercase;
+        }
+
+    .risk-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .risk-item {
+        padding: 11px;
+        border: 1px solid rgba(51, 65, 85, 0.35);
+        border-radius: 9px;
+        background: rgba(7, 14, 25, 0.52);
+    }
+
+    .risk-item-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: #6d8298;
+        font-size: 8px;
+    }
+
+        .risk-item-heading strong {
+            color: #dbeafe;
+        }
+
+    .risk-dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        margin-right: 6px;
+        border-radius: 50%;
+    }
+
+    .risk-critical {
+        background: #f43f5e;
+    }
+
+    .risk-high {
+        background: #f97316;
+    }
+
+    .risk-medium {
+        background: #eab308;
+    }
+
+    .risk-low {
+        background: #22c55e;
+    }
+
+    .risk-track {
+        height: 4px;
+        margin-top: 8px;
+        overflow: hidden;
+        border-radius: 4px;
+        background: rgba(71, 85, 105, 0.36);
+    }
+
+    .risk-fill {
+        height: 100%;
+        border-radius: inherit;
+    }
+
+    .risk-fill-critical {
+        background: linear-gradient( 90deg, #be123c, #fb7185 );
+    }
+
+    .risk-fill-high {
+        background: linear-gradient( 90deg, #c2410c, #fb923c );
+    }
+
+    .risk-fill-medium {
+        background: linear-gradient( 90deg, #a16207, #facc15 );
+    }
+
+    .risk-fill-low {
+        background: linear-gradient( 90deg, #15803d, #4ade80 );
+    }
+
+    .live-event-feed {
+        max-height: 320px;
+        overflow-y: auto;
+        padding: 10px 14px 14px;
+    }
+
+    .live-event-item {
+        display: grid;
+        grid-template-columns: 4px minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        margin-top: 8px;
+        padding: 11px;
+        border: 1px solid rgba(51, 65, 85, 0.34);
+        border-radius: 8px;
+        background: rgba(7, 14, 25, 0.5);
+    }
+
+    .event-severity-line {
+        width: 4px;
+        height: 35px;
+        border-radius: 3px;
+    }
+
+    .event-critical {
+        background: #f43f5e;
+    }
+
+    .event-high {
+        background: #f97316;
+    }
+
+    .event-medium {
+        background: #eab308;
+    }
+
+    .event-low {
+        background: #22c55e;
+    }
+
+    .event-feed-content strong,
+    .event-feed-content small {
+        display: block;
+    }
+
+    .event-feed-content strong {
+        color: #cbd5e1;
+        font-size: 8px;
+    }
+
+    .event-feed-content small,
+    .live-event-item time {
+        margin-top: 4px;
+        color: #50657b;
+        font-size: 6.5px;
+    }
+
+    .live-event-item time {
+        font-family: Consolas, monospace;
+        white-space: nowrap;
+    }
+
+    .records-panel {
+        margin-bottom: 20px;
+    }
+
+    .records-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 18px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.38);
+    }
+
+        .records-header h2 {
+            margin: 0;
+            color: #e2e8f0;
+            font-size: 15px;
+        }
+
+        .records-header p {
+            margin: 5px 0 0;
+            color: #52677d;
+            font-size: 8px;
+        }
+
+    .record-count-label {
+        border-color: rgba(56, 189, 248, 0.22);
+        background: rgba(14, 165, 233, 0.06);
+        color: #7dd3fc;
+    }
+
+    .logs-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 1.6fr) repeat(5, minmax(120px, 0.55fr)) auto;
+        gap: 9px;
+        padding: 15px 18px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.34);
+    }
+
+    .logs-search-box {
+        position: relative;
+    }
+
+    .search-symbol {
+        position: absolute;
+        top: 50%;
+        left: 12px;
+        color: #4f647a;
+        transform: translateY(-50%);
+    }
+
+    .logs-search-box input,
+    .logs-filter-grid select,
+    .modal-status-control select {
+        width: 100%;
+        min-height: 38px;
+        border: 1px solid rgba(71, 85, 105, 0.58);
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.84);
+        color: #94a3b8;
+        font-size: 8px;
+        outline: none;
+    }
+
+    .logs-search-box input {
+        padding: 8px 10px 8px 36px;
+    }
+
+    .logs-filter-grid select,
+    .modal-status-control select {
+        padding: 7px 8px;
+    }
+
+        .logs-search-box input:focus,
+        .logs-filter-grid select:focus,
+        .modal-status-control select:focus {
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.08);
+        }
+
+    .clear-filter-button {
+        padding: 8px 11px;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        background: rgba(14, 165, 233, 0.07);
+        color: #7dd3fc;
+    }
+
+        .clear-filter-button:hover {
+            background: #0284c7;
+            color: #ffffff;
+        }
+
+    .logs-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .advanced-logs-table {
+        width: 100%;
+        min-width: 1380px;
+        border-collapse: collapse;
+    }
+
+        .advanced-logs-table thead {
+            background: rgba(15, 23, 42, 0.84);
+        }
+
+        .advanced-logs-table th {
+            padding: 13px 14px;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.52);
+            color: #52677d;
+            font-size: 6.5px;
+            font-weight: 900;
+            letter-spacing: 0.7px;
+            text-align: left;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .advanced-logs-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.28);
+            color: #90a3b7;
+            font-size: 8px;
+            vertical-align: middle;
+        }
+
+        .advanced-logs-table tbody tr {
+            transition: background 0.2s ease;
+        }
+
+            .advanced-logs-table tbody tr:hover {
+                background: rgba(14, 165, 233, 0.05);
+            }
+
+    .detection-id-cell,
+    .officer-cell {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+    .detection-thumbnail {
+        position: relative;
+        display: flex;
+        width: 40px;
+        height: 34px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 7px;
+        background: radial-gradient( circle, #15304a, #07101b 75% );
+        color: #7dd3fc;
+    }
+
+    .scan-line {
+        position: absolute;
+        right: 0;
+        left: 0;
+        height: 1px;
+        background: #22d3ee;
+        box-shadow: 0 0 7px rgba(34, 211, 238, 0.8);
+        animation: rowScan 2.6s linear infinite;
+    }
+
+    @@keyframes rowScan {
+        0% {
+            top: 5px;
+        }
+
+        50% {
+            top: 28px;
+        }
+
+        100% {
+            top: 5px;
+        }
+    }
+
+    .detection-id-cell strong,
+    .camera-location-cell strong,
+    .detected-time-cell strong {
+        display: block;
+        color: #d6e0eb;
+        font-size: 8px;
+    }
+
+    .detection-id-cell small,
+    .camera-location-cell small,
+    .detected-time-cell small {
+        display: block;
+        margin-top: 4px;
+        color: #4f647a;
+        font-size: 6.5px;
+    }
+
+    .object-type-badge,
+    .severity-badge,
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 8px;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 12px;
+        background: rgba(14, 165, 233, 0.06);
+        color: #7dd3fc;
+        font-size: 6.5px;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+
+    .severity-critical,
+    .status-escalated {
+        border-color: rgba(244, 63, 94, 0.25);
+        background: rgba(244, 63, 94, 0.08);
+        color: #fb7185;
+    }
+
+    .severity-high {
+        border-color: rgba(249, 115, 22, 0.25);
+        background: rgba(249, 115, 22, 0.08);
+        color: #fb923c;
+    }
+
+    .severity-medium,
+    .status-pending {
+        border-color: rgba(234, 179, 8, 0.25);
+        background: rgba(234, 179, 8, 0.08);
+        color: #facc15;
+    }
+
+    .severity-low,
+    .status-reviewed,
+    .status-resolved {
+        border-color: rgba(34, 197, 94, 0.25);
+        background: rgba(34, 197, 94, 0.08);
+        color: #4ade80;
+    }
+
+    .badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 7px currentColor;
+    }
+
+    .confidence-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 5px;
+    }
+
+        .confidence-header strong {
+            color: #cbd5e1;
+            font-family: Consolas, monospace;
+            font-size: 7.5px;
+        }
+
+        .confidence-header small {
+            color: #4f647a;
+            font-size: 6px;
+        }
+
+    .confidence-track {
+        width: 95px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 3px;
+        background: rgba(71, 85, 105, 0.38);
+    }
+
+    .confidence-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient( 90deg, #06b6d4, #22c55e );
+    }
+
+    .officer-avatar {
+        display: inline-flex;
+        width: 28px;
+        height: 28px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(168, 85, 247, 0.28);
+        border-radius: 50%;
+        background: rgba(168, 85, 247, 0.08);
+        color: #c084fc;
+        font-size: 7px;
+        font-weight: 900;
+    }
+
+    .view-detection-button {
+        padding: 7px 11px;
+        border: 1px solid #0284c7;
+        background: linear-gradient( 135deg, #0284c7, #2563eb );
+        color: #ffffff;
+    }
+
+    .empty-detection-state {
+        display: none;
+        min-height: 250px;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .empty-state-icon {
+        display: flex;
+        width: 60px;
+        height: 60px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(56, 189, 248, 0.24);
+        border-radius: 50%;
+        color: #7dd3fc;
+        font-size: 20px;
+    }
+
+    .empty-detection-state h3 {
+        margin: 14px 0 0;
+        color: #dbeafe;
+    }
+
+    .empty-detection-state p {
+        color: #52677d;
+        font-size: 8px;
+    }
+
+    .logs-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        border-top: 1px solid rgba(51, 65, 85, 0.34);
+    }
+
+    .pagination-information {
+        color: #52677d;
+        font-size: 7px;
+    }
+
+    .pagination-controls,
+    .page-number-buttons {
+        display: flex;
+        gap: 6px;
+    }
+
+    .pagination-button,
+    .page-number-button {
+        min-width: 34px;
+        padding: 6px 9px;
+        border: 1px solid rgba(71, 85, 105, 0.55);
+        background: rgba(15, 23, 42, 0.8);
+        color: #73889e;
+    }
+
+        .page-number-button.active {
+            border-color: #0284c7;
+            background: #0284c7;
+            color: #ffffff;
+        }
+
+        .pagination-button:disabled {
+            opacity: 0.35;
+            cursor: default;
+            transform: none;
+        }
+
+    .detection-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 7000;
+        display: none;
+    }
+
+        .detection-modal.open {
+            display: block;
+        }
+
+    .detection-modal-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(1, 6, 15, 0.86);
+        backdrop-filter: blur(9px);
+    }
+
+    .detection-modal-dialog {
+        position: relative;
+        z-index: 2;
+        width: min(930px, calc(100% - 30px));
+        max-height: 92vh;
+        margin: 4vh auto;
+        overflow-y: auto;
+        border: 1px solid rgba(56, 189, 248, 0.24);
+        border-radius: 16px;
+        background: linear-gradient( 145deg, #0d1728, #070e19 );
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.62);
+    }
+
+    .detection-modal-header,
+    .detection-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.42);
+    }
+
+        .detection-modal-header h2 {
+            margin: 5px 0 0;
+            color: #f1f5f9;
+            font-size: 18px;
+        }
+
+    .modal-close-button {
+        width: 36px;
+        padding: 0;
+        border: 1px solid rgba(71, 85, 105, 0.55);
+        background: rgba(15, 23, 42, 0.82);
+        color: #64748b;
+        font-size: 18px;
+    }
+
+    .detection-modal-body {
+        padding: 20px;
+    }
+
+    .modal-camera-preview {
+        position: relative;
+        height: 300px;
+        overflow: hidden;
+        border: 1px solid rgba(56, 189, 248, 0.34);
+        border-radius: 12px;
+        background: radial-gradient( circle at 50% 55%, #1d3650, #07101b 72% );
+    }
+
+    .preview-grid-overlay {
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient( rgba(56, 189, 248, 0.06) 1px, transparent 1px ), linear-gradient( 90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px );
+        background-size: 32px 32px;
+    }
+
+    .preview-detection-box {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 145px;
+        height: 175px;
+        border: 1px solid #22d3ee;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 20px rgba(34, 211, 238, 0.18);
+    }
+
+        .preview-detection-box span {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 6px;
+            padding: 5px 7px;
+            border-radius: 4px;
+            background: rgba(3, 8, 16, 0.78);
+            color: #67e8f9;
+            font-family: Consolas, monospace;
+            font-size: 7px;
+            white-space: nowrap;
+        }
+
+    .preview-live-label,
+    .preview-camera-label {
+        position: absolute;
+        top: 13px;
+        z-index: 3;
+        padding: 6px 8px;
+        border-radius: 5px;
+        background: rgba(3, 8, 16, 0.76);
+        font-family: Consolas, monospace;
+        font-size: 7px;
+    }
+
+    .preview-live-label {
+        left: 13px;
+        color: #fb7185;
+    }
+
+        .preview-live-label span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin-right: 5px;
+            border-radius: 50%;
+            background: #f43f5e;
+        }
+
+    .preview-camera-label {
+        right: 13px;
+        color: #7dd3fc;
+    }
+
+    .preview-placeholder {
+        position: absolute;
+        right: 0;
+        bottom: 12px;
+        left: 0;
+        color: #3e5369;
+        font-size: 8px;
+        letter-spacing: 1px;
+        text-align: center;
+    }
+
+    .modal-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .modal-detail-item,
+    .modal-notes-panel,
+    .modal-status-control {
+        padding: 11px;
+        border: 1px solid rgba(51, 65, 85, 0.42);
+        border-radius: 8px;
+        background: rgba(10, 19, 32, 0.78);
+    }
+
+        .modal-detail-item span,
+        .modal-detail-item strong {
+            display: block;
+        }
+
+        .modal-detail-item span,
+        .modal-notes-panel span,
+        .modal-status-control label {
+            color: #52677f;
+            font-size: 7px;
+            text-transform: uppercase;
+        }
+
+        .modal-detail-item strong {
+            margin-top: 5px;
+            overflow: hidden;
+            color: #cbd5e1;
+            font-size: 8px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .modal-notes-panel,
+    .modal-status-control {
+        margin-top: 10px;
+    }
+
+        .modal-notes-panel p {
+            margin: 7px 0 0;
+            color: #91a5b9;
+            font-size: 8px;
+            line-height: 1.6;
+        }
+
+        .modal-status-control select {
+            display: block;
+            margin-top: 7px;
+        }
+
+    .detection-modal-footer {
+        justify-content: flex-end;
+        border-top: 1px solid rgba(51, 65, 85, 0.42);
+        border-bottom: 0;
+    }
+
+    body.modal-open {
+        overflow: hidden;
+    }
+
+    .detection-toast {
+        position: fixed;
+        right: 25px;
+        bottom: 25px;
+        z-index: 8000;
+        display: flex;
+        min-width: 300px;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 15px;
+        border: 1px solid rgba(34, 197, 94, 0.28);
+        border-radius: 10px;
+        background: linear-gradient( 135deg, rgba(4, 47, 30, 0.96), rgba(6, 24, 30, 0.96) );
+        color: #bbf7d0;
+        font-size: 9px;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.42);
+        opacity: 0;
+        transform: translateY(20px);
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+        .detection-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+    .toast-icon {
+        display: flex;
+        width: 25px;
+        height: 25px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #22c55e;
+        color: #ffffff;
+    }
+
+    @@media (max-width: 1280px) {
+        .logs-intelligence-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .logs-filter-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .logs-search-box {
+            grid-column: span 3;
+        }
+    }
+
+    @@media (max-width: 900px) {
+        .logs-page-heading {
+            flex-direction: column;
+        }
+
+        .logs-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .modal-detail-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 650px) {
+        .logs-summary-grid,
+        .logs-filter-grid,
+        .modal-detail-grid,
+        .risk-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .logs-search-box {
+            grid-column: auto;
+        }
+
+        .logs-status-banner,
+        .records-header,
+        .logs-pagination {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .risk-layout {
+            justify-items: center;
+        }
+
+        .logs-heading-actions {
+            width: 100%;
+        }
+
+            .logs-heading-actions button {
+                flex: 1;
+            }
+
+        .detection-toast {
+            right: 14px;
+            bottom: 14px;
+            left: 14px;
+            min-width: 0;
+        }
+    }
+</style>
+
+<section class="advanced-logs-page">
+
+    <header class="logs-page-heading">
+
+        <div>
+
+            <span class="page-eyebrow">
+                SECURITY OPERATIONS CENTRE
+            </span>
+
+            <h1>AI Detection Logs</h1>
+
+            <p>
+                Monitor, investigate and review AI-generated security
+                detections across all connected surveillance cameras.
+            </p>
+
+        </div>
+
+        <div class="logs-heading-actions">
+
+            <button type="button"
+                    class="secondary-action-button"
+                    onclick="refreshDetectionLogs()">
+                ↻ Refresh
+            </button>
+
+            <button type="button"
+                    class="primary-action-button"
+                    onclick="exportDetectionLogs()">
+                ⇩ Export CSV
+            </button>
+
+        </div>
+
+    </header>
+
+    <section class="logs-status-banner">
+
+        <div class="logs-status-left">
+
+            <span class="logs-live-indicator"></span>
+
+            <div>
+
+                <strong>
+                    Live detection monitoring is active
+                </strong>
+
+                <small>
+                    Last synchronisation:
+                    <span id="lastSyncTime">
+                        @DateTime.Now.ToString("hh:mm:ss tt")
+                    </span>
+                </small>
+
+            </div>
+
+        </div>
+
+        <div class="logs-system-health">
+
+            <span>System health</span>
+
+            <strong>98.7%</strong>
+
+        </div>
+
+    </section>
+
+    <section class="logs-summary-grid">
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-blue">
+                ◎
+            </div>
+
+            <div class="summary-card-content">
+
+                <span>Total detections</span>
+
+                <strong>@totalCount</strong>
+
+                <small>
+                    @todayCount recorded today
+                </small>
+
+            </div>
+
+        </article>
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-red">
+                !
+            </div>
+
+            <div class="summary-card-content">
+
+                <span>Critical events</span>
+
+                <strong>@criticalCount</strong>
+
+                <small>
+                    Require immediate review
+                </small>
+
+            </div>
+
+        </article>
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-orange">
+                ◷
+            </div>
+
+            <div class="summary-card-content">
+
+                <span>Pending review</span>
+
+                <strong>@pendingCount</strong>
+
+                <small>
+                    @escalatedCount escalated events
+                </small>
+
+            </div>
+
+        </article>
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-green">
+                %
+            </div>
+
+            <div class="summary-card-content">
+
+                <span>Average confidence</span>
+
+                <strong>
+                    @averageConfidence.ToString("0.0")%
+                </strong>
+
+                <small>
+                    Across all AI detections
+                </small>
+
+            </div>
+
+        </article>
+
+    </section>
+
+    <section class="logs-intelligence-grid">
+
+        <article class="logs-panel">
+
+            <header class="panel-header">
+
+                <div>
+
+                    <span class="panel-eyebrow">
+                        RISK ANALYSIS
+                    </span>
+
+                    <h2>Severity Distribution</h2>
+
+                </div>
+
+                <span class="live-label">
+                    LIVE
+                </span>
+
+            </header>
+
+            <div class="risk-layout">
+
+                <div class="risk-donut"
+                     style="
+                        --critical: @criticalEndCss%;
+                        --high: @highEndCss%;
+                        --medium: @mediumEndCss%;
+                     ">
+
+                    <div class="risk-donut-centre">
+
+                        <strong>@totalCount</strong>
+
+                        <span>Events</span>
+
+                    </div>
+
+                </div>
+
+                <div class="risk-list">
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+
+                            <span>
+                                <i class="risk-dot risk-critical"></i>
+                                Critical
+                            </span>
+
+                            <strong>@criticalCount</strong>
+
+                        </div>
+
+                        <div class="risk-track">
+
+                            <div class="risk-fill risk-fill-critical"
+                                 style="width: @criticalPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+
+                            <span>
+                                <i class="risk-dot risk-high"></i>
+                                High
+                            </span>
+
+                            <strong>@highCount</strong>
+
+                        </div>
+
+                        <div class="risk-track">
+
+                            <div class="risk-fill risk-fill-high"
+                                 style="width: @highPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+
+                            <span>
+                                <i class="risk-dot risk-medium"></i>
+                                Medium
+                            </span>
+
+                            <strong>@mediumCount</strong>
+
+                        </div>
+
+                        <div class="risk-track">
+
+                            <div class="risk-fill risk-fill-medium"
+                                 style="width: @mediumPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+
+                            <span>
+                                <i class="risk-dot risk-low"></i>
+                                Low
+                            </span>
+
+                            <strong>@lowCount</strong>
+
+                        </div>
+
+                        <div class="risk-track">
+
+                            <div class="risk-fill risk-fill-low"
+                                 style="width: @(totalCount > 0 ? (lowCount * 100.0 / totalCount).ToString("0.##", CultureInfo.InvariantCulture) : "0")%">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </article>
+
+        <article class="logs-panel">
+
+            <header class="panel-header">
+
+                <div>
+
+                    <span class="panel-eyebrow">
+                        REAL-TIME STREAM
+                    </span>
+
+                    <h2>Latest Event Feed</h2>
+
+                </div>
+
+                <span class="live-label">
+                    CONNECTED
+                </span>
+
+            </header>
+
+            <div id="liveEventFeed"
+                 class="live-event-feed">
+
+                @foreach (var detection in Model.Take(6))
                 {
-                    <tr data-object="@detection.ObjectType.ToLower()">
-                        <td>
-                            <strong>#@detection.DetectionId</strong>
-                        </td>
+                    string eventSeverity =
+                    string.IsNullOrWhiteSpace(detection.Severity)
+                    ? "low"
+                    : detection.Severity.ToLowerInvariant();
 
-                        <td>
-                            <strong>@detection.CameraName</strong>
-                        </td>
+                    <div class="live-event-item">
 
-                        <td>@detection.Location</td>
+                        <span class="event-severity-line event-@eventSeverity">
+                        </span>
 
-                        <td>
-                            <span class="object-badge">
-                                @detection.ObjectType
-                            </span>
-                        </td>
+                        <div class="event-feed-content">
 
-                        <td>
-                            <span class="confidence-value">
-                                @detection.Confidence.ToString("0.0")%
-                            </span>
-                        </td>
+                            <strong>
+                                @detection.AlertType
+                            </strong>
 
-                        <td>@detection.AlertType</td>
+                            <small>
+                                @detection.CameraCode ·
+                                @detection.Location
+                            </small>
 
-                        <td>
-                            @detection.DetectedAt.ToString("dd MMM yyyy, h:mm tt")
-                        </td>
+                        </div>
 
-                        <td>
-                            <button type="button"
-                                    class="detection-view-button"
-                                    onclick="showDetection('@detection.DetectionId')">
-                                View
-                            </button>
-                        </td>
-                    </tr>
+                        <time>
+                            @detection.DetectedAt.ToString("HH:mm:ss")
+                        </time>
+
+                    </div>
                 }
-            </tbody>
-        </table>
+
+            </div>
+
+        </article>
+
+    </section>
+
+    <section class="logs-panel records-panel">
+
+        <header class="records-header">
+
+            <div>
+
+                <h2>Detection Records</h2>
+
+                <p>
+                    Search, filter and investigate recorded security events.
+                </p>
+
+            </div>
+
+            <span class="record-count-label">
+                <span id="visibleRecordCount">
+                    @totalCount
+                </span>
+                records
+            </span>
+
+        </header>
+
+        <div class="logs-filter-grid">
+
+            <div class="logs-search-box">
+
+                <span class="search-symbol">
+                    ⌕
+                </span>
+
+                <input id="detectionSearch"
+                       type="search"
+                       placeholder="Search ID, camera, location, object or officer..."
+                       oninput="applyDetectionFilters()" />
+
+            </div>
+
+            <select id="cameraFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All cameras
+                </option>
+
+                @foreach (
+                                string camera in Model
+                                .Where(detection =>
+                                !string.IsNullOrWhiteSpace(
+                                detection.CameraName
+                                )
+                                )
+                                .Select(detection =>
+                                detection.CameraName
+                                )
+                                .Distinct()
+                                .OrderBy(camera => camera)
+                                )
+                {
+                    <option value="@camera.ToLowerInvariant()">
+                        @camera
+                    </option>
+                }
+
+            </select>
+
+            <select id="objectFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All objects
+                </option>
+
+                @foreach (
+                                string objectType in Model
+                                .Where(detection =>
+                                !string.IsNullOrWhiteSpace(
+                                detection.ObjectType
+                                )
+                                )
+                                .Select(detection =>
+                                detection.ObjectType
+                                )
+                                .Distinct()
+                                .OrderBy(objectType => objectType)
+                                )
+                {
+                    <option value="@objectType.ToLowerInvariant()">
+                        @objectType
+                    </option>
+                }
+
+            </select>
+
+            <select id="severityFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All severities
+                </option>
+
+                <option value="critical">
+                    Critical
+                </option>
+
+                <option value="high">
+                    High
+                </option>
+
+                <option value="medium">
+                    Medium
+                </option>
+
+                <option value="low">
+                    Low
+                </option>
+
+            </select>
+
+            <select id="statusFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All statuses
+                </option>
+
+                <option value="pending">
+                    Pending
+                </option>
+
+                <option value="reviewed">
+                    Reviewed
+                </option>
+
+                <option value="escalated">
+                    Escalated
+                </option>
+
+                <option value="resolved">
+                    Resolved
+                </option>
+
+            </select>
+
+            <select id="dateFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    Any time
+                </option>
+
+                <option value="today">
+                    Today
+                </option>
+
+                <option value="24hours">
+                    Last 24 hours
+                </option>
+
+                <option value="7days">
+                    Last 7 days
+                </option>
+
+            </select>
+
+            <button type="button"
+                    class="clear-filter-button"
+                    onclick="clearDetectionFilters()">
+                Clear filters
+            </button>
+
+        </div>
+
+        <div class="logs-table-wrapper">
+
+            <table id="detectionLogsTable"
+                   class="advanced-logs-table">
+
+                <thead>
+
+                    <tr>
+                        <th>Detection</th>
+                        <th>Camera and location</th>
+                        <th>Object</th>
+                        <th>Confidence</th>
+                        <th>Risk</th>
+                        <th>Status</th>
+                        <th>AI model</th>
+                        <th>Assigned officer</th>
+                        <th>Detected</th>
+                        <th>Action</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    @foreach (var detection in Model)
+                    {
+                        string severity =
+                        string.IsNullOrWhiteSpace(
+                        detection.Severity
+                        )
+                        ? "Low"
+                        : detection.Severity;
+
+                        string status =
+                        string.IsNullOrWhiteSpace(
+                        detection.Status
+                        )
+                        ? "Pending"
+                        : detection.Status;
+
+                        string severityClass =
+                        severity.ToLowerInvariant();
+
+                        string statusClass =
+                        status.ToLowerInvariant();
+
+                        string cameraName =
+                        detection.CameraName ?? "";
+
+                        string objectType =
+                        detection.ObjectType ?? "";
+
+                        string assignedOfficer =
+                        string.IsNullOrWhiteSpace(
+                        detection.AssignedOfficer
+                        )
+                        ? "Unassigned"
+                        : detection.AssignedOfficer;
+
+                        string objectIcon =
+                        objectType switch
+                        {
+                            "Person" => "●",
+                            "Vehicle" => "◆",
+                            "Package" => "■",
+                            _ => "○"
+                        };
+
+                        string officerInitials =
+                        assignedOfficer == "Unassigned"
+                        ? "?"
+                        : string.Concat(
+                        assignedOfficer
+                        .Split(
+                        ' ',
+                        StringSplitOptions
+                        .RemoveEmptyEntries
+                        )
+                        .Take(2)
+                        .Select(name => name[0])
+                        );
+
+                        string confidenceCss =
+                        detection.Confidence.ToString(
+                        "0.0",
+                        CultureInfo.InvariantCulture
+                        );
+
+                        <tr class="detection-log-row"
+                            data-id="@detection.DetectionId"
+                            data-camera="@cameraName.ToLowerInvariant()"
+                            data-object="@objectType.ToLowerInvariant()"
+                            data-severity="@severityClass"
+                            data-status="@statusClass"
+                            data-date="@detection.DetectedAt.ToString("O")"
+                            data-tracking-id="@detection.TrackingId"
+                            data-frame-id="@detection.FrameId"
+                            data-camera-name="@detection.CameraName"
+                            data-camera-code="@detection.CameraCode"
+                            data-location="@detection.Location"
+                            data-zone="@detection.Zone"
+                            data-object-type="@detection.ObjectType"
+                            data-confidence="@confidenceCss"
+                            data-alert-type="@detection.AlertType"
+                            data-severity-name="@severity"
+                            data-status-name="@status"
+                            data-officer="@assignedOfficer"
+                            data-detected-at="@detection.DetectedAt.ToString("dd MMM yyyy, hh:mm tt")"
+                            data-notes="@detection.Notes"
+                            data-ai-model="@detection.AiModel"
+                            data-processing-time="@detection.ProcessingTimeMs.ToString("0.0", CultureInfo.InvariantCulture)"
+                            data-box-count="@detection.BoundingBoxCount">
+
+                            <td>
+
+                                <div class="detection-id-cell">
+
+                                    <div class="detection-thumbnail">
+
+                                        <span>@objectIcon</span>
+
+                                        <div class="scan-line"></div>
+
+                                    </div>
+
+                                    <div>
+
+                                        <strong>
+                                            DET-@detection.DetectionId
+                                        </strong>
+
+                                        <small>
+                                            @detection.AlertType
+                                        </small>
+
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <div class="camera-location-cell">
+
+                                    <strong>
+                                        @detection.CameraName
+                                    </strong>
+
+                                    <small>
+                                        @detection.CameraCode ·
+                                        @detection.Location
+                                    </small>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <span class="object-type-badge">
+                                    @detection.ObjectType
+                                </span>
+
+                            </td>
+
+                            <td>
+
+                                <div class="confidence-cell">
+
+                                    <div class="confidence-header">
+
+                                        <strong>
+                                            @detection.Confidence.ToString("0.0")%
+                                        </strong>
+
+                                        <small>
+                                            @detection.ProcessingTimeMs.ToString("0.0") ms
+                                        </small>
+
+                                    </div>
+
+                                    <div class="confidence-track">
+
+                                        <div class="confidence-fill"
+                                             style="width: @confidenceCss%">
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <span class="severity-badge severity-@severityClass">
+
+                                    <span class="badge-dot"></span>
+
+                                    @severity
+
+                                </span>
+
+                            </td>
+
+                            <td>
+
+                                <span class="status-badge status-@statusClass">
+                                    @status
+                                </span>
+
+                            </td>
+
+                            <td>
+
+                                <div class="camera-location-cell">
+
+                                    <strong>
+                                        @detection.AiModel
+                                    </strong>
+
+                                    <small>
+                                        @detection.BoundingBoxCount boxes
+                                    </small>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <div class="officer-cell">
+
+                                    <span class="officer-avatar">
+                                        @officerInitials
+                                    </span>
+
+                                    <span>
+                                        @assignedOfficer
+                                    </span>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <div class="detected-time-cell">
+
+                                    <strong>
+                                        @detection.DetectedAt.ToString("hh:mm tt")
+                                    </strong>
+
+                                    <small>
+                                        @detection.DetectedAt.ToString("dd MMM yyyy")
+                                    </small>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <button type="button"
+                                        class="view-detection-button"
+                                        onclick="openDetectionModal(this)">
+                                    View
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+            <div id="emptyDetectionState"
+                 class="empty-detection-state">
+
+                <div class="empty-state-icon">
+                    ⌕
+                </div>
+
+                <h3>No detections found</h3>
+
+                <p>
+                    Try changing your search or selected filters.
+                </p>
+
+                <button type="button"
+                        class="secondary-action-button"
+                        onclick="clearDetectionFilters()">
+                    Clear all filters
+                </button>
+
+            </div>
+
+        </div>
+
+        <div class="logs-pagination">
+
+            <div class="pagination-information">
+
+                Showing
+
+                <strong id="paginationStart">
+                    0
+                </strong>
+
+                to
+
+                <strong id="paginationEnd">
+                    0
+                </strong>
+
+                of
+
+                <strong id="paginationTotal">
+                    @totalCount
+                </strong>
+
+                records
+
+            </div>
+
+            <div class="pagination-controls">
+
+                <button type="button"
+                        id="previousPageButton"
+                        class="pagination-button"
+                        onclick="changeDetectionPage(-1)">
+                    Previous
+                </button>
+
+                <div id="pageNumberButtons"
+                     class="page-number-buttons">
+                </div>
+
+                <button type="button"
+                        id="nextPageButton"
+                        class="pagination-button"
+                        onclick="changeDetectionPage(1)">
+                    Next
+                </button>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</section>
+
+<div id="detectionDetailsModal"
+     class="detection-modal"
+     aria-hidden="true">
+
+    <div class="detection-modal-overlay"
+         onclick="closeDetectionModal()">
     </div>
 
-    <div id="noDetectionsMessage" class="no-detections-message">
-        No detection records match the selected filters.
+    <div class="detection-modal-dialog">
+
+        <header class="detection-modal-header">
+
+            <div>
+
+                <span class="modal-eyebrow">
+                    DETECTION INVESTIGATION
+                </span>
+
+                <h2 id="modalDetectionTitle">
+                    Detection details
+                </h2>
+
+            </div>
+
+            <button type="button"
+                    class="modal-close-button"
+                    onclick="closeDetectionModal()">
+                ×
+            </button>
+
+        </header>
+
+        <div class="detection-modal-body">
+
+            <div class="modal-camera-preview">
+
+                <div class="preview-grid-overlay"></div>
+
+                <div class="preview-detection-box">
+
+                    <span id="previewObjectLabel">
+                        DETECTION
+                    </span>
+
+                </div>
+
+                <div class="preview-live-label">
+
+                    <span></span>
+
+                    RECORDED FRAME
+
+                </div>
+
+                <div id="previewCameraLabel"
+                     class="preview-camera-label">
+                    CAM-001
+                </div>
+
+                <div class="preview-placeholder">
+                    AI DETECTION FRAME
+                </div>
+
+            </div>
+
+            <div class="modal-detail-grid">
+
+                <div class="modal-detail-item">
+
+                    <span>Detection ID</span>
+
+                    <strong id="modalDetectionId">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Tracking ID</span>
+
+                    <strong id="modalTrackingId">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Frame ID</span>
+
+                    <strong id="modalFrameId">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Object</span>
+
+                    <strong id="modalObjectType">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Confidence</span>
+
+                    <strong id="modalConfidence">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Severity</span>
+
+                    <strong id="modalSeverity">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Camera</span>
+
+                    <strong id="modalCameraName">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Location</span>
+
+                    <strong id="modalLocation">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Zone</span>
+
+                    <strong id="modalZone">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>AI model</span>
+
+                    <strong id="modalAiModel">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Processing time</span>
+
+                    <strong id="modalProcessingTime">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Bounding boxes</span>
+
+                    <strong id="modalBoxCount">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Detected at</span>
+
+                    <strong id="modalDetectedAt">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="modal-detail-item">
+
+                    <span>Assigned officer</span>
+
+                    <strong id="modalOfficer">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+            <div class="modal-notes-panel">
+
+                <span>
+                    AI analysis and investigation notes
+                </span>
+
+                <p id="modalNotes">
+                    —
+                </p>
+
+            </div>
+
+            <div class="modal-status-control">
+
+                <label for="modalStatusSelect">
+                    Update investigation status
+                </label>
+
+                <select id="modalStatusSelect">
+
+                    <option value="Pending">
+                        Pending
+                    </option>
+
+                    <option value="Reviewed">
+                        Reviewed
+                    </option>
+
+                    <option value="Escalated">
+                        Escalated
+                    </option>
+
+                    <option value="Resolved">
+                        Resolved
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+        <footer class="detection-modal-footer">
+
+            <button type="button"
+                    class="secondary-action-button"
+                    onclick="closeDetectionModal()">
+                Close
+            </button>
+
+            <button type="button"
+                    class="primary-action-button"
+                    onclick="saveDetectionStatus()">
+                Save status
+            </button>
+
+        </footer>
+
     </div>
+
+</div>
+
+<div id="detectionToast"
+     class="detection-toast">
+
+    <span class="toast-icon">
+        ✓
+    </span>
+
+    <span id="detectionToastMessage">
+        Update saved successfully.
+    </span>
+
 </div>
 
 <script>
-    function filterDetections() {
+    const rowsPerPage = 10;
+
+    let currentPage = 1;
+    let filteredRows = [];
+    let selectedDetectionRow = null;
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function () {
+            applyDetectionFilters();
+
+            document.addEventListener(
+                "keydown",
+                function (event) {
+                    if (event.key === "Escape") {
+                        closeDetectionModal();
+                    }
+                }
+            );
+        }
+    );
+
+    function applyDetectionFilters() {
         const searchValue =
-            document.getElementById("detectionSearch").value.toLowerCase();
+            document
+                .getElementById("detectionSearch")
+                .value
+                .toLowerCase()
+                .trim();
+
+        const cameraValue =
+            document
+                .getElementById("cameraFilter")
+                .value;
 
         const objectValue =
-            document.getElementById("objectFilter").value;
+            document
+                .getElementById("objectFilter")
+                .value;
 
-        const rows =
-            document.querySelectorAll("#detectionTable tbody tr");
+        const severityValue =
+            document
+                .getElementById("severityFilter")
+                .value;
 
-        let visibleRows = 0;
+        const statusValue =
+            document
+                .getElementById("statusFilter")
+                .value;
 
-        rows.forEach(row => {
-            const rowText = row.innerText.toLowerCase();
-            const rowObject = row.dataset.object;
+        const dateValue =
+            document
+                .getElementById("dateFilter")
+                .value;
 
-            const matchesSearch =
-                rowText.includes(searchValue);
+        const allRows =
+            Array.from(
+                document.querySelectorAll(
+                    ".detection-log-row"
+                )
+            );
 
-            const matchesObject =
-                objectValue === "" || rowObject === objectValue;
+        const now = new Date();
 
-            const shouldShow =
-                matchesSearch && matchesObject;
+        filteredRows =
+            allRows.filter(
+                function (row) {
+                    const rowText =
+                        row.innerText.toLowerCase();
 
-            row.style.display = shouldShow ? "" : "none";
+                    const matchesSearch =
+                        searchValue === "" ||
+                        rowText.includes(
+                            searchValue
+                        );
 
-            if (shouldShow) {
-                visibleRows++;
-            }
-        });
+                    const matchesCamera =
+                        cameraValue === "" ||
+                        row.dataset.camera ===
+                            cameraValue;
 
-        document.getElementById("noDetectionsMessage").style.display =
-            visibleRows === 0 ? "block" : "none";
+                    const matchesObject =
+                        objectValue === "" ||
+                        row.dataset.object ===
+                            objectValue;
+
+                    const matchesSeverity =
+                        severityValue === "" ||
+                        row.dataset.severity ===
+                            severityValue;
+
+                    const matchesStatus =
+                        statusValue === "" ||
+                        row.dataset.status ===
+                            statusValue;
+
+                    const rowDate =
+                        new Date(
+                            row.dataset.date
+                        );
+
+                    let matchesDate = true;
+
+                    if (dateValue === "today") {
+                        matchesDate =
+                            rowDate.toDateString() ===
+                            now.toDateString();
+                    }
+
+                    if (dateValue === "24hours") {
+                        const difference =
+                            now.getTime() -
+                            rowDate.getTime();
+
+                        matchesDate =
+                            difference >= 0 &&
+                            difference <=
+                                24 *
+                                60 *
+                                60 *
+                                1000;
+                    }
+
+                    if (dateValue === "7days") {
+                        const difference =
+                            now.getTime() -
+                            rowDate.getTime();
+
+                        matchesDate =
+                            difference >= 0 &&
+                            difference <=
+                                7 *
+                                24 *
+                                60 *
+                                60 *
+                                1000;
+                    }
+
+                    return (
+                        matchesSearch &&
+                        matchesCamera &&
+                        matchesObject &&
+                        matchesSeverity &&
+                        matchesStatus &&
+                        matchesDate
+                    );
+                }
+            );
+
+        currentPage = 1;
+
+        updateDetectionTable();
     }
 
-    function showDetection(detectionId) {
-        alert(
-            "Detection #" +
-            detectionId +
-            " selected. Real image preview will be connected during backend integration."
+    function updateDetectionTable() {
+        const allRows =
+            Array.from(
+                document.querySelectorAll(
+                    ".detection-log-row"
+                )
+            );
+
+        allRows.forEach(
+            function (row) {
+                row.style.display = "none";
+            }
+        );
+
+        const startIndex =
+            (currentPage - 1) *
+            rowsPerPage;
+
+        const endIndex =
+            startIndex +
+            rowsPerPage;
+
+        const currentRows =
+            filteredRows.slice(
+                startIndex,
+                endIndex
+            );
+
+        currentRows.forEach(
+            function (row) {
+                row.style.display = "";
+            }
+        );
+
+        const totalRecords =
+            filteredRows.length;
+
+        document.getElementById(
+            "visibleRecordCount"
+        ).textContent =
+            totalRecords;
+
+        document.getElementById(
+            "paginationStart"
+        ).textContent =
+            totalRecords === 0
+                ? 0
+                : startIndex + 1;
+
+        document.getElementById(
+            "paginationEnd"
+        ).textContent =
+            Math.min(
+                endIndex,
+                totalRecords
+            );
+
+        document.getElementById(
+            "paginationTotal"
+        ).textContent =
+            totalRecords;
+
+        document.getElementById(
+            "emptyDetectionState"
+        ).style.display =
+            totalRecords === 0
+                ? "flex"
+                : "none";
+
+        document.getElementById(
+            "detectionLogsTable"
+        ).style.display =
+            totalRecords === 0
+                ? "none"
+                : "table";
+
+        updatePaginationButtons();
+    }
+
+    function updatePaginationButtons() {
+        const pageCount =
+            Math.max(
+                1,
+                Math.ceil(
+                    filteredRows.length /
+                    rowsPerPage
+                )
+            );
+
+        if (currentPage > pageCount) {
+            currentPage = pageCount;
+        }
+
+        const pageContainer =
+            document.getElementById(
+                "pageNumberButtons"
+            );
+
+        pageContainer.innerHTML = "";
+
+        for (
+            let pageNumber = 1;
+            pageNumber <= pageCount;
+            pageNumber++
+        ) {
+            const button =
+                document.createElement(
+                    "button"
+                );
+
+            button.type = "button";
+
+            button.textContent =
+                pageNumber;
+
+            button.className =
+                "page-number-button";
+
+            if (
+                pageNumber ===
+                currentPage
+            ) {
+                button.classList.add(
+                    "active"
+                );
+            }
+
+            button.addEventListener(
+                "click",
+                function () {
+                    currentPage =
+                        pageNumber;
+
+                    updateDetectionTable();
+                }
+            );
+
+            pageContainer.appendChild(
+                button
+            );
+        }
+
+        document.getElementById(
+            "previousPageButton"
+        ).disabled =
+            currentPage === 1;
+
+        document.getElementById(
+            "nextPageButton"
+        ).disabled =
+            currentPage === pageCount ||
+            filteredRows.length === 0;
+    }
+
+    function changeDetectionPage(
+        direction
+    ) {
+        const pageCount =
+            Math.max(
+                1,
+                Math.ceil(
+                    filteredRows.length /
+                    rowsPerPage
+                )
+            );
+
+        const requestedPage =
+            currentPage +
+            direction;
+
+        if (
+            requestedPage < 1 ||
+            requestedPage > pageCount
+        ) {
+            return;
+        }
+
+        currentPage =
+            requestedPage;
+
+        updateDetectionTable();
+    }
+
+    function clearDetectionFilters() {
+        document.getElementById(
+            "detectionSearch"
+        ).value = "";
+
+        document.getElementById(
+            "cameraFilter"
+        ).value = "";
+
+        document.getElementById(
+            "objectFilter"
+        ).value = "";
+
+        document.getElementById(
+            "severityFilter"
+        ).value = "";
+
+        document.getElementById(
+            "statusFilter"
+        ).value = "";
+
+        document.getElementById(
+            "dateFilter"
+        ).value = "";
+
+        applyDetectionFilters();
+
+        showDetectionToast(
+            "Detection filters cleared."
+        );
+    }
+
+    function openDetectionModal(
+        button
+    ) {
+        const row =
+            button.closest(
+                ".detection-log-row"
+            );
+
+        if (!row) {
+            return;
+        }
+
+        selectedDetectionRow = row;
+
+        document.getElementById(
+            "modalDetectionTitle"
+        ).textContent =
+            "DET-" +
+            row.dataset.id;
+
+        document.getElementById(
+            "modalDetectionId"
+        ).textContent =
+            "DET-" +
+            row.dataset.id;
+
+        document.getElementById(
+            "modalTrackingId"
+        ).textContent =
+            row.dataset.trackingId ||
+            "—";
+
+        document.getElementById(
+            "modalFrameId"
+        ).textContent =
+            row.dataset.frameId ||
+            "—";
+
+        document.getElementById(
+            "modalObjectType"
+        ).textContent =
+            row.dataset.objectType ||
+            "—";
+
+        document.getElementById(
+            "modalConfidence"
+        ).textContent =
+            (row.dataset.confidence ||
+                "0") +
+            "%";
+
+        document.getElementById(
+            "modalSeverity"
+        ).textContent =
+            row.dataset.severityName ||
+            "—";
+
+        document.getElementById(
+            "modalCameraName"
+        ).textContent =
+            (row.dataset.cameraName ||
+                "—") +
+            " (" +
+            (row.dataset.cameraCode ||
+                "—") +
+            ")";
+
+        document.getElementById(
+            "modalLocation"
+        ).textContent =
+            row.dataset.location ||
+            "—";
+
+        document.getElementById(
+            "modalZone"
+        ).textContent =
+            row.dataset.zone ||
+            "—";
+
+        document.getElementById(
+            "modalAiModel"
+        ).textContent =
+            row.dataset.aiModel ||
+            "—";
+
+        document.getElementById(
+            "modalProcessingTime"
+        ).textContent =
+            (row.dataset.processingTime ||
+                "0") +
+            " ms";
+
+        document.getElementById(
+            "modalBoxCount"
+        ).textContent =
+            row.dataset.boxCount ||
+            "0";
+
+        document.getElementById(
+            "modalDetectedAt"
+        ).textContent =
+            row.dataset.detectedAt ||
+            "—";
+
+        document.getElementById(
+            "modalOfficer"
+        ).textContent =
+            row.dataset.officer ||
+            "Unassigned";
+
+        document.getElementById(
+            "modalNotes"
+        ).textContent =
+            row.dataset.notes ||
+            "No investigation notes recorded.";
+
+        document.getElementById(
+            "modalStatusSelect"
+        ).value =
+            row.dataset.statusName ||
+            "Pending";
+
+        document.getElementById(
+            "previewObjectLabel"
+        ).textContent =
+            (
+                row.dataset.objectType ||
+                "OBJECT"
+            ).toUpperCase() +
+            " " +
+            (
+                row.dataset.confidence ||
+                "0"
+            ) +
+            "%";
+
+        document.getElementById(
+            "previewCameraLabel"
+        ).textContent =
+            row.dataset.cameraCode ||
+            "CAMERA";
+
+        const modal =
+            document.getElementById(
+                "detectionDetailsModal"
+            );
+
+        modal.classList.add(
+            "open"
+        );
+
+        modal.setAttribute(
+            "aria-hidden",
+            "false"
+        );
+
+        document.body.classList.add(
+            "modal-open"
+        );
+    }
+
+    function closeDetectionModal() {
+        const modal =
+            document.getElementById(
+                "detectionDetailsModal"
+            );
+
+        modal.classList.remove(
+            "open"
+        );
+
+        modal.setAttribute(
+            "aria-hidden",
+            "true"
+        );
+
+        document.body.classList.remove(
+            "modal-open"
+        );
+
+        selectedDetectionRow = null;
+    }
+
+    function saveDetectionStatus() {
+        if (!selectedDetectionRow) {
+            return;
+        }
+
+        const selectedStatus =
+            document.getElementById(
+                "modalStatusSelect"
+            ).value;
+
+        selectedDetectionRow.dataset.status =
+            selectedStatus.toLowerCase();
+
+        selectedDetectionRow.dataset.statusName =
+            selectedStatus;
+
+        const statusBadge =
+            selectedDetectionRow.querySelector(
+                ".status-badge"
+            );
+
+        if (statusBadge) {
+            statusBadge.textContent =
+                selectedStatus;
+
+            statusBadge.className =
+                "status-badge status-" +
+                selectedStatus.toLowerCase();
+        }
+
+        closeDetectionModal();
+
+        applyDetectionFilters();
+
+        showDetectionToast(
+            "Detection status updated to " +
+            selectedStatus +
+            "."
+        );
+    }
+
+    function refreshDetectionLogs() {
+        document.getElementById(
+            "lastSyncTime"
+        ).textContent =
+            new Date()
+                .toLocaleTimeString();
+
+        showDetectionToast(
+            "Detection records refreshed successfully."
+        );
+    }
+
+    function exportDetectionLogs() {
+        const csvRows = [
+            [
+                "Detection ID",
+                "Camera",
+                "Location",
+                "Object",
+                "Confidence",
+                "Severity",
+                "Status",
+                "AI Model",
+                "Officer",
+                "Detected At"
+            ]
+        ];
+
+        filteredRows.forEach(
+            function (row) {
+                csvRows.push(
+                    [
+                        "DET-" +
+                            row.dataset.id,
+                        row.dataset.cameraName,
+                        row.dataset.location,
+                        row.dataset.objectType,
+                        row.dataset.confidence +
+                            "%",
+                        row.dataset.severityName,
+                        row.dataset.statusName,
+                        row.dataset.aiModel,
+                        row.dataset.officer,
+                        row.dataset.detectedAt
+                    ]
+                );
+            }
+        );
+
+        const csvContent =
+            csvRows
+                .map(
+                    function (row) {
+                        return row
+                            .map(
+                                function (value) {
+                                    return (
+                                        '"' +
+                                        String(
+                                            value ?? ""
+                                        ).replaceAll(
+                                            '"',
+                                            '""'
+                                        ) +
+                                        '"'
+                                    );
+                                }
+                            )
+                            .join(",");
+                    }
+                )
+                .join("\n");
+
+        const blob =
+            new Blob(
+                [csvContent],
+                {
+                    type:
+                        "text/csv;charset=utf-8;"
+                }
+            );
+
+        const downloadUrl =
+            URL.createObjectURL(
+                blob
+            );
+
+        const downloadLink =
+            document.createElement(
+                "a"
+            );
+
+        downloadLink.href =
+            downloadUrl;
+
+        downloadLink.download =
+            "NovaIntegration_Detection_Logs.csv";
+
+        document.body.appendChild(
+            downloadLink
+        );
+
+        downloadLink.click();
+
+        downloadLink.remove();
+
+        URL.revokeObjectURL(
+            downloadUrl
+        );
+
+        showDetectionToast(
+            filteredRows.length +
+            " records exported."
+        );
+    }
+
+    function showDetectionToast(
+        message
+    ) {
+        const toast =
+            document.getElementById(
+                "detectionToast"
+            );
+
+        document.getElementById(
+            "detectionToastMessage"
+        ).textContent =
+            message;
+
+        toast.classList.add(
+            "show"
+        );
+
+        window.setTimeout(
+            function () {
+                toast.classList.remove(
+                    "show"
+                );
+            },
+            3000
         );
     }
 </script>
