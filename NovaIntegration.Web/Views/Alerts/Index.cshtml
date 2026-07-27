@@ -5,795 +5,89 @@
 @{
     ViewData["Title"] = "Alerts";
 
-    int totalAlerts = Model?.Count ?? 0;
+    List<NovaIntegration.Web.Models.Alert> alerts =
+        Model ?? new List<NovaIntegration.Web.Models.Alert>();
 
-    int openAlerts =
-        Model?.Count(alert =>
-            string.Equals(
-                alert.Status,
-                "Open",
-                StringComparison.OrdinalIgnoreCase
-            )
-        ) ?? 0;
+    int totalAlerts = alerts.Count;
 
-    int acknowledgedAlerts =
-        Model?.Count(alert =>
-            string.Equals(
-                alert.Status,
-                "Acknowledged",
-                StringComparison.OrdinalIgnoreCase
-            )
-        ) ?? 0;
+    int openAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Status,
+            "Open",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
 
-    int resolvedAlerts =
-        Model?.Count(alert =>
-            string.Equals(
-                alert.Status,
-                "Resolved",
-                StringComparison.OrdinalIgnoreCase
-            )
-        ) ?? 0;
+    int acknowledgedAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Status,
+            "Acknowledged",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
 
-    int highAlerts =
-        Model?.Count(alert =>
-            string.Equals(
-                alert.Severity,
-                "High",
-                StringComparison.OrdinalIgnoreCase
-            )
-        ) ?? 0;
+    int resolvedAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Status,
+            "Resolved",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
 
-    int mediumAlerts =
-        Model?.Count(alert =>
-            string.Equals(
-                alert.Severity,
-                "Medium",
-                StringComparison.OrdinalIgnoreCase
-            )
-        ) ?? 0;
+    int highAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Severity,
+            "High",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
 
-    int lowAlerts =
-        Model?.Count(alert =>
-            string.Equals(
-                alert.Severity,
-                "Low",
-                StringComparison.OrdinalIgnoreCase
-            )
-        ) ?? 0;
+    int mediumAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Severity,
+            "Medium",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int lowAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Severity,
+            "Low",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
 
     double averageConfidence =
         totalAlerts > 0
-            ? Model.Average(alert => alert.Confidence)
+            ? alerts.Average(alert => alert.Confidence)
+            : 0;
+
+    double highPercentage =
+        totalAlerts > 0
+            ? highAlerts * 100.0 / totalAlerts
+            : 0;
+
+    double mediumPercentage =
+        totalAlerts > 0
+            ? mediumAlerts * 100.0 / totalAlerts
+            : 0;
+
+    double lowPercentage =
+        totalAlerts > 0
+            ? lowAlerts * 100.0 / totalAlerts
             : 0;
 }
 
-<style>
-    .alerts-soc-page {
-        min-height: 100vh;
-        color: #dbeafe;
-    }
-
-        .alerts-soc-page::before {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            content: "";
-            background: radial-gradient( circle at 10% 10%, rgba(244, 63, 94, 0.12), transparent 30% ), radial-gradient( circle at 90% 8%, rgba(14, 165, 233, 0.12), transparent 28% ), linear-gradient( 145deg, #050b14, #08111f 50%, #050914 );
-        }
-
-        .alerts-soc-page::after {
-            position: fixed;
-            inset: 0;
-            z-index: -1;
-            content: "";
-            opacity: 0.14;
-            pointer-events: none;
-            background-image: linear-gradient( rgba(56, 189, 248, 0.07) 1px, transparent 1px ), linear-gradient( 90deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px );
-            background-size: 42px 42px;
-        }
-
-    .alerts-header,
-    .alerts-summary-card,
-    .alerts-filter-panel,
-    .alerts-table-panel,
-    .alerts-analysis-panel {
-        border: 1px solid rgba(51, 65, 85, 0.52);
-        background: linear-gradient( 145deg, rgba(12, 21, 36, 0.97), rgba(6, 13, 24, 0.98) );
-        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(16px);
-    }
-
-    .alerts-header {
-        position: relative;
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 24px;
-        margin-bottom: 14px;
-        padding: 25px;
-        overflow: hidden;
-        border-radius: 18px;
-    }
-
-        .alerts-header::before,
-        .alerts-table-panel::before,
-        .alerts-analysis-panel::before {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 120px;
-            height: 2px;
-            content: "";
-            background: linear-gradient( 90deg, #fb7185, transparent );
-        }
-
-    .alerts-eyebrow {
-        display: block;
-        color: #fb7185;
-        font-size: 8px;
-        font-weight: 900;
-        letter-spacing: 1.5px;
-    }
-
-    .alerts-header h1 {
-        margin: 7px 0 0;
-        color: #f8fafc;
-        font-size: clamp(30px, 3vw, 40px);
-        font-weight: 850;
-        letter-spacing: -1px;
-    }
-
-    .alerts-header p {
-        max-width: 720px;
-        margin: 9px 0 0;
-        color: #8196ac;
-        font-size: 13px;
-        line-height: 1.65;
-    }
-
-    .alerts-header-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-width: 220px;
-    }
-
-    .alerts-clock {
-        padding: 13px 15px;
-        border: 1px solid rgba(56, 189, 248, 0.18);
-        border-radius: 10px;
-        background: rgba(4, 10, 20, 0.58);
-        text-align: right;
-    }
-
-        .alerts-clock span,
-        .alerts-clock strong,
-        .alerts-clock small {
-            display: block;
-        }
-
-        .alerts-clock span {
-            color: #4f647b;
-            font-size: 7px;
-            font-weight: 900;
-            letter-spacing: 1px;
-        }
-
-        .alerts-clock strong {
-            margin-top: 5px;
-            color: #7dd3fc;
-            font-family: Consolas, monospace;
-            font-size: 22px;
-        }
-
-        .alerts-clock small {
-            margin-top: 3px;
-            color: #52677e;
-            font-size: 7px;
-        }
-
-    .alerts-refresh-button,
-    .alerts-clear-button,
-    .alert-review-button {
-        min-height: 38px;
-        border-radius: 8px;
-        font-size: 8px;
-        font-weight: 850;
-        cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .alerts-refresh-button {
-        border: 1px solid #be123c;
-        background: linear-gradient( 135deg, #be123c, #e11d48 );
-        color: #ffffff;
-    }
-
-        .alerts-refresh-button:hover,
-        .alert-review-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
-        }
-
-    .alerts-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-        margin-bottom: 14px;
-    }
-
-    .alerts-summary-card {
-        display: flex;
-        align-items: center;
-        gap: 13px;
-        min-width: 0;
-        padding: 17px;
-        border-radius: 14px;
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-
-        .alerts-summary-card:hover {
-            border-color: rgba(56, 189, 248, 0.35);
-            transform: translateY(-3px);
-        }
-
-    .alerts-summary-icon {
-        display: flex;
-        width: 43px;
-        height: 43px;
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid currentColor;
-        border-radius: 11px;
-        font-size: 15px;
-        font-weight: 900;
-    }
-
-    .icon-blue {
-        color: #38bdf8;
-        background: rgba(14, 165, 233, 0.09);
-    }
-
-    .icon-red {
-        color: #fb7185;
-        background: rgba(244, 63, 94, 0.09);
-    }
-
-    .icon-orange {
-        color: #fb923c;
-        background: rgba(249, 115, 22, 0.09);
-    }
-
-    .icon-purple {
-        color: #c084fc;
-        background: rgba(168, 85, 247, 0.09);
-    }
-
-    .alerts-summary-content span,
-    .alerts-summary-content strong,
-    .alerts-summary-content small {
-        display: block;
-    }
-
-    .alerts-summary-content span {
-        color: #7f94aa;
-        font-size: 8px;
-        font-weight: 750;
-        text-transform: uppercase;
-    }
-
-    .alerts-summary-content strong {
-        margin-top: 6px;
-        color: #f8fafc;
-        font-size: 27px;
-        line-height: 1;
-    }
-
-    .alerts-summary-content small {
-        margin-top: 6px;
-        color: #4f657b;
-        font-size: 7px;
-    }
-
-    .alerts-filter-panel {
-        margin-bottom: 14px;
-        padding: 15px 18px;
-        border-radius: 14px;
-    }
-
-    .alerts-filter-grid {
-        display: grid;
-        grid-template-columns: minmax(260px, 1.5fr) minmax(150px, 0.55fr) minmax(150px, 0.55fr) auto;
-        gap: 10px;
-    }
-
-    .alerts-search-box {
-        position: relative;
-    }
-
-    .alerts-search-icon {
-        position: absolute;
-        top: 50%;
-        left: 12px;
-        color: #4f647a;
-        transform: translateY(-50%);
-    }
-
-    .alerts-search-box input,
-    .alerts-filter-grid select {
-        width: 100%;
-        min-height: 39px;
-        border: 1px solid rgba(71, 85, 105, 0.58);
-        border-radius: 8px;
-        background: rgba(15, 23, 42, 0.84);
-        color: #94a3b8;
-        font-size: 8px;
-        outline: none;
-    }
-
-    .alerts-search-box input {
-        padding: 8px 10px 8px 36px;
-    }
-
-    .alerts-filter-grid select {
-        padding: 7px 9px;
-    }
-
-        .alerts-search-box input:focus,
-        .alerts-filter-grid select:focus {
-            border-color: #0ea5e9;
-            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.08);
-        }
-
-    .alerts-clear-button {
-        padding: 8px 12px;
-        border: 1px solid rgba(56, 189, 248, 0.25);
-        background: rgba(14, 165, 233, 0.07);
-        color: #7dd3fc;
-    }
-
-    .alerts-main-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.3fr);
-        gap: 14px;
-    }
-
-    .alerts-table-panel,
-    .alerts-analysis-panel {
-        position: relative;
-        min-width: 0;
-        overflow: hidden;
-        border-radius: 16px;
-    }
-
-    .alerts-panel-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 14px;
-        padding: 17px 18px;
-        border-bottom: 1px solid rgba(51, 65, 85, 0.38);
-    }
-
-        .alerts-panel-header h2 {
-            margin: 5px 0 0;
-            color: #e2e8f0;
-            font-size: 14px;
-        }
-
-    .alerts-panel-label {
-        color: #38bdf8;
-        font-size: 7px;
-        font-weight: 900;
-        letter-spacing: 1.2px;
-    }
-
-    .alerts-result-count {
-        padding: 5px 8px;
-        border: 1px solid rgba(56, 189, 248, 0.22);
-        border-radius: 12px;
-        background: rgba(14, 165, 233, 0.06);
-        color: #7dd3fc;
-        font-size: 7px;
-        font-weight: 850;
-    }
-
-    .alerts-table-wrapper {
-        overflow-x: auto;
-    }
-
-    .alerts-table {
-        width: 100%;
-        min-width: 1050px;
-        border-collapse: collapse;
-    }
-
-        .alerts-table thead {
-            background: rgba(15, 23, 42, 0.84);
-        }
-
-        .alerts-table th {
-            padding: 13px 14px;
-            border-bottom: 1px solid rgba(51, 65, 85, 0.52);
-            color: #52677d;
-            font-size: 6.5px;
-            font-weight: 900;
-            letter-spacing: 0.7px;
-            text-align: left;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .alerts-table td {
-            padding: 12px 14px;
-            border-bottom: 1px solid rgba(51, 65, 85, 0.28);
-            color: #90a3b7;
-            font-size: 8px;
-            vertical-align: middle;
-        }
-
-        .alerts-table tbody tr:hover {
-            background: rgba(14, 165, 233, 0.05);
-        }
-
-    .alert-primary,
-    .alert-secondary {
-        display: block;
-    }
-
-    .alert-primary {
-        color: #d6e0eb;
-        font-size: 8px;
-        font-weight: 800;
-    }
-
-    .alert-secondary {
-        margin-top: 4px;
-        color: #4f647a;
-        font-size: 6.5px;
-    }
-
-    .alert-code {
-        color: #7dd3fc;
-        font-family: Consolas, monospace;
-    }
-
-    .alert-confidence {
-        min-width: 90px;
-    }
-
-        .alert-confidence strong {
-            display: block;
-            margin-bottom: 5px;
-            color: #cbd5e1;
-            font-family: Consolas, monospace;
-            font-size: 7.5px;
-        }
-
-    .confidence-track {
-        width: 80px;
-        height: 3px;
-        overflow: hidden;
-        border-radius: 3px;
-        background: rgba(71, 85, 105, 0.38);
-    }
-
-    .confidence-fill {
-        height: 100%;
-        border-radius: inherit;
-        background: linear-gradient( 90deg, #06b6d4, #22c55e );
-    }
-
-    .alert-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 5px 8px;
-        border: 1px solid transparent;
-        border-radius: 12px;
-        font-size: 6.5px;
-        font-weight: 850;
-        white-space: nowrap;
-    }
-
-        .alert-badge i {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: currentColor;
-        }
-
-    .severity-high,
-    .status-open {
-        border-color: rgba(244, 63, 94, 0.25);
-        background: rgba(244, 63, 94, 0.08);
-        color: #fb7185;
-    }
-
-    .severity-medium {
-        border-color: rgba(249, 115, 22, 0.25);
-        background: rgba(249, 115, 22, 0.08);
-        color: #fb923c;
-    }
-
-    .severity-low,
-    .status-resolved {
-        border-color: rgba(34, 197, 94, 0.25);
-        background: rgba(34, 197, 94, 0.08);
-        color: #4ade80;
-    }
-
-    .status-acknowledged {
-        border-color: rgba(56, 189, 248, 0.25);
-        background: rgba(14, 165, 233, 0.08);
-        color: #7dd3fc;
-    }
-
-    .alert-review-button {
-        padding: 7px 11px;
-        border: 1px solid #0284c7;
-        background: linear-gradient( 135deg, #0284c7, #2563eb );
-        color: #ffffff;
-    }
-
-    .alerts-no-results {
-        display: none;
-        padding: 50px 20px;
-        color: #52677d;
-        font-size: 9px;
-        text-align: center;
-    }
-
-    .alerts-analysis-content {
-        padding: 16px;
-    }
-
-    .analysis-item {
-        margin-bottom: 12px;
-        padding: 11px;
-        border: 1px solid rgba(51, 65, 85, 0.35);
-        border-radius: 9px;
-        background: rgba(7, 14, 25, 0.52);
-    }
-
-    .analysis-heading {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        color: #6d8298;
-        font-size: 8px;
-    }
-
-        .analysis-heading strong {
-            color: #dbeafe;
-        }
-
-    .analysis-track {
-        height: 4px;
-        margin-top: 8px;
-        overflow: hidden;
-        border-radius: 4px;
-        background: rgba(71, 85, 105, 0.36);
-    }
-
-    .analysis-fill {
-        height: 100%;
-        border-radius: inherit;
-    }
-
-    .analysis-high {
-        background: linear-gradient( 90deg, #be123c, #fb7185 );
-    }
-
-    .analysis-medium {
-        background: linear-gradient( 90deg, #c2410c, #fb923c );
-    }
-
-    .analysis-low {
-        background: linear-gradient( 90deg, #15803d, #4ade80 );
-    }
-
-    .alert-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 7000;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        background: rgba(1, 6, 15, 0.86);
-        backdrop-filter: blur(9px);
-    }
-
-        .alert-modal.open {
-            display: flex;
-        }
-
-    .alert-modal-dialog {
-        width: min(760px, 100%);
-        max-height: 90vh;
-        overflow-y: auto;
-        border: 1px solid rgba(56, 189, 248, 0.24);
-        border-radius: 16px;
-        background: linear-gradient( 145deg, #0d1728, #070e19 );
-        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.62);
-    }
-
-    .alert-modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 18px 20px;
-        border-bottom: 1px solid rgba(51, 65, 85, 0.42);
-    }
-
-        .alert-modal-header h2 {
-            margin: 5px 0 0;
-            color: #f1f5f9;
-            font-size: 18px;
-        }
-
-    .alert-modal-close {
-        width: 36px;
-        height: 36px;
-        border: 1px solid rgba(71, 85, 105, 0.55);
-        border-radius: 8px;
-        background: rgba(15, 23, 42, 0.82);
-        color: #64748b;
-        font-size: 18px;
-        cursor: pointer;
-    }
-
-    .alert-modal-body {
-        padding: 20px;
-    }
-
-    .alert-preview {
-        position: relative;
-        height: 260px;
-        overflow: hidden;
-        border: 1px solid rgba(244, 63, 94, 0.3);
-        border-radius: 12px;
-        background: radial-gradient( circle at 50% 55%, #3b1c28, #0d0810 72% );
-    }
-
-        .alert-preview::before {
-            position: absolute;
-            inset: 0;
-            content: "";
-            background-image: linear-gradient( rgba(244, 63, 94, 0.06) 1px, transparent 1px ), linear-gradient( 90deg, rgba(244, 63, 94, 0.06) 1px, transparent 1px );
-            background-size: 28px 28px;
-        }
-
-    .alert-preview-box {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 120px;
-        height: 145px;
-        border: 1px solid #fb7185;
-        transform: translate(-50%, -50%);
-    }
-
-    .alert-preview-label {
-        position: absolute;
-        top: calc(50% + 80px);
-        left: 50%;
-        padding: 5px 8px;
-        border-radius: 4px;
-        background: rgba(3, 8, 16, 0.78);
-        color: #fda4af;
-        font-family: Consolas, monospace;
-        font-size: 7px;
-        transform: translateX(-50%);
-    }
-
-    .alert-detail-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-top: 14px;
-    }
-
-    .alert-detail-item {
-        padding: 11px;
-        border: 1px solid rgba(51, 65, 85, 0.42);
-        border-radius: 8px;
-        background: rgba(10, 19, 32, 0.78);
-    }
-
-        .alert-detail-item span,
-        .alert-detail-item strong {
-            display: block;
-        }
-
-        .alert-detail-item span {
-            color: #52677f;
-            font-size: 7px;
-            text-transform: uppercase;
-        }
-
-        .alert-detail-item strong {
-            margin-top: 5px;
-            color: #cbd5e1;
-            font-size: 8px;
-        }
-
-    .alert-toast {
-        position: fixed;
-        right: 25px;
-        bottom: 25px;
-        z-index: 8000;
-        min-width: 280px;
-        padding: 13px 15px;
-        border: 1px solid rgba(34, 197, 94, 0.28);
-        border-radius: 10px;
-        background: linear-gradient( 135deg, rgba(4, 47, 30, 0.96), rgba(6, 24, 30, 0.96) );
-        color: #bbf7d0;
-        font-size: 9px;
-        opacity: 0;
-        transform: translateY(20px);
-        pointer-events: none;
-        transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-        .alert-toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-    @@media (max-width: 1200px) {
-        .alerts-summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .alerts-main-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    @@media (max-width: 800px) {
-        .alerts-header {
-            flex-direction: column;
-        }
-
-        .alerts-header-actions {
-            width: 100%;
-        }
-
-        .alerts-filter-grid {
-            grid-template-columns: 1fr 1fr;
-        }
-
-        .alerts-search-box {
-            grid-column: span 2;
-        }
-
-        .alert-detail-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @@media (max-width: 600px) {
-        .alerts-summary-grid,
-        .alerts-filter-grid,
-        .alert-detail-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .alerts-search-box {
-            grid-column: auto;
-        }
-    }
-</style>
+<link rel="stylesheet"
+      href="~/css/advanced-alerts-detection.css"
+      asp-append-version="true" />
 
 <section class="alerts-soc-page">
 
     <header class="alerts-header">
 
         <div>
-
             <span class="alerts-eyebrow">
                 NOVA SECURITY INCIDENT RESPONSE
             </span>
@@ -804,23 +98,20 @@
                 Review AI-generated security alerts, monitor severity,
                 investigate incidents and track response status.
             </p>
-
         </div>
 
         <div class="alerts-header-actions">
 
             <div class="alerts-clock">
-
                 <span>INCIDENT SYSTEM TIME</span>
 
                 <strong id="alertsClock">
                     @DateTime.Now.ToString("HH:mm:ss")
                 </strong>
 
-                <small>
+                <small id="alertsDate">
                     @DateTime.Now.ToString("dddd, dd MMM yyyy")
                 </small>
-
             </div>
 
             <button type="button"
@@ -836,67 +127,47 @@
     <section class="alerts-summary-grid">
 
         <article class="alerts-summary-card">
-
             <div class="alerts-summary-icon icon-blue">
                 AL
             </div>
 
             <div class="alerts-summary-content">
-
                 <span>Total alerts</span>
-
                 <strong>@totalAlerts</strong>
-
                 <small>All recorded incidents</small>
-
             </div>
-
         </article>
 
         <article class="alerts-summary-card">
-
             <div class="alerts-summary-icon icon-red">
                 !
             </div>
 
             <div class="alerts-summary-content">
-
                 <span>Open alerts</span>
-
                 <strong>@openAlerts</strong>
-
                 <small>Require immediate review</small>
-
             </div>
-
         </article>
 
         <article class="alerts-summary-card">
-
             <div class="alerts-summary-icon icon-orange">
                 ▲
             </div>
 
             <div class="alerts-summary-content">
-
                 <span>High priority</span>
-
                 <strong>@highAlerts</strong>
-
                 <small>Elevated-risk incidents</small>
-
             </div>
-
         </article>
 
         <article class="alerts-summary-card">
-
             <div class="alerts-summary-icon icon-purple">
                 %
             </div>
 
             <div class="alerts-summary-content">
-
                 <span>Average confidence</span>
 
                 <strong>
@@ -904,9 +175,7 @@
                 </strong>
 
                 <small>AI confidence score</small>
-
             </div>
-
         </article>
 
     </section>
@@ -917,7 +186,9 @@
 
             <div class="alerts-search-box">
 
-                <span class="alerts-search-icon">⌕</span>
+                <span class="alerts-search-icon">
+                    ⌕
+                </span>
 
                 <input id="alertSearch"
                        type="search"
@@ -985,13 +256,11 @@
             <header class="alerts-panel-header">
 
                 <div>
-
                     <span class="alerts-panel-label">
                         INCIDENT QUEUE
                     </span>
 
                     <h2>Alert Investigation Records</h2>
-
                 </div>
 
                 <span id="alertsResultCount"
@@ -1007,7 +276,6 @@
                        class="alerts-table">
 
                     <thead>
-
                         <tr>
                             <th>Alert</th>
                             <th>Camera and location</th>
@@ -1018,12 +286,11 @@
                             <th>Detected</th>
                             <th>Action</th>
                         </tr>
-
                     </thead>
 
                     <tbody>
 
-                        @foreach (var alert in Model ?? new List<NovaIntegration.Web.Models.Alert>())
+                        @foreach (var alert in alerts)
                         {
                             string severity =
                             string.IsNullOrWhiteSpace(alert.Severity)
@@ -1047,7 +314,8 @@
                             CultureInfo.InvariantCulture
                             );
 
-                            <tr data-severity="@severityClass"
+                            <tr class="alert-row"
+                                data-severity="@severityClass"
                                 data-status="@statusClass"
                                 data-alert-id="@alert.AlertId"
                                 data-alert-type="@alert.AlertType"
@@ -1060,7 +328,6 @@
                                 data-detected="@alert.DetectedAt.ToString("dd MMM yyyy, hh:mm tt")">
 
                                 <td>
-
                                     <span class="alert-primary alert-code">
                                         #@alert.AlertId
                                     </span>
@@ -1068,11 +335,9 @@
                                     <span class="alert-secondary">
                                         @alert.AlertType
                                     </span>
-
                                 </td>
 
                                 <td>
-
                                     <span class="alert-primary">
                                         @alert.CameraName
                                     </span>
@@ -1080,19 +345,15 @@
                                     <span class="alert-secondary">
                                         @alert.Location
                                     </span>
-
                                 </td>
 
                                 <td>
-
                                     <span class="alert-primary">
                                         @alert.ObjectType
                                     </span>
-
                                 </td>
 
                                 <td>
-
                                     <div class="alert-confidence">
 
                                         <strong>
@@ -1100,57 +361,44 @@
                                         </strong>
 
                                         <div class="confidence-track">
-
                                             <div class="confidence-fill"
                                                  style="width: @confidenceCss%">
                                             </div>
-
                                         </div>
 
                                     </div>
-
                                 </td>
 
                                 <td>
-
                                     <span class="alert-badge severity-@severityClass">
-
                                         <i></i>
-
                                         @severity
-
                                     </span>
-
                                 </td>
 
                                 <td>
-
                                     <span class="alert-badge status-@statusClass">
-
                                         <i></i>
-
                                         @status
-
                                     </span>
-
                                 </td>
 
                                 <td>
-
-                                    <span class="alert-code">
-                                        @alert.DetectedAt.ToString("dd MMM, HH:mm")
+                                    <span class="alert-primary">
+                                        @alert.DetectedAt.ToString("dd MMM yyyy")
                                     </span>
 
+                                    <span class="alert-secondary">
+                                        @alert.DetectedAt.ToString("hh:mm:ss tt")
+                                    </span>
                                 </td>
 
                                 <td>
-
                                     <button type="button"
                                             class="alert-review-button"
                                             onclick="openAlertModal(this)">
-                                        Review
+                                        Investigate
                                     </button>
-
                                 </td>
 
                             </tr>
@@ -1160,11 +408,13 @@
 
                 </table>
 
-            </div>
+                <div id="alertsNoResults"
+                     class="alerts-no-results">
 
-            <div id="noAlertsMessage"
-                 class="alerts-no-results">
-                No alerts match the selected filters.
+                    No alerts match the selected filters.
+
+                </div>
+
             </div>
 
         </article>
@@ -1174,13 +424,11 @@
             <header class="alerts-panel-header">
 
                 <div>
-
                     <span class="alerts-panel-label">
                         THREAT ANALYSIS
                     </span>
 
                     <h2>Severity Distribution</h2>
-
                 </div>
 
                 <span class="alerts-result-count">
@@ -1194,19 +442,14 @@
                 <div class="analysis-item">
 
                     <div class="analysis-heading">
-
-                        <span>High severity</span>
-
+                        <span>High risk</span>
                         <strong>@highAlerts</strong>
-
                     </div>
 
                     <div class="analysis-track">
-
                         <div class="analysis-fill analysis-high"
-                             style="width: @(totalAlerts > 0 ? highAlerts * 100.0 / totalAlerts : 0)%">
+                             style="width: @highPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
                         </div>
-
                     </div>
 
                 </div>
@@ -1214,19 +457,14 @@
                 <div class="analysis-item">
 
                     <div class="analysis-heading">
-
-                        <span>Medium severity</span>
-
+                        <span>Medium risk</span>
                         <strong>@mediumAlerts</strong>
-
                     </div>
 
                     <div class="analysis-track">
-
                         <div class="analysis-fill analysis-medium"
-                             style="width: @(totalAlerts > 0 ? mediumAlerts * 100.0 / totalAlerts : 0)%">
+                             style="width: @mediumPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
                         </div>
-
                     </div>
 
                 </div>
@@ -1234,19 +472,14 @@
                 <div class="analysis-item">
 
                     <div class="analysis-heading">
-
-                        <span>Low severity</span>
-
+                        <span>Low risk</span>
                         <strong>@lowAlerts</strong>
-
                     </div>
 
                     <div class="analysis-track">
-
                         <div class="analysis-fill analysis-low"
-                             style="width: @(totalAlerts > 0 ? lowAlerts * 100.0 / totalAlerts : 0)%">
+                             style="width: @lowPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
                         </div>
-
                     </div>
 
                 </div>
@@ -1254,11 +487,8 @@
                 <div class="analysis-item">
 
                     <div class="analysis-heading">
-
-                        <span>Open incidents</span>
-
+                        <span>Open</span>
                         <strong>@openAlerts</strong>
-
                     </div>
 
                 </div>
@@ -1266,11 +496,8 @@
                 <div class="analysis-item">
 
                     <div class="analysis-heading">
-
                         <span>Acknowledged</span>
-
                         <strong>@acknowledgedAlerts</strong>
-
                     </div>
 
                 </div>
@@ -1278,11 +505,8 @@
                 <div class="analysis-item">
 
                     <div class="analysis-heading">
-
                         <span>Resolved</span>
-
                         <strong>@resolvedAlerts</strong>
-
                     </div>
 
                 </div>
@@ -1297,22 +521,20 @@
 
 <div id="alertModal"
      class="alert-modal"
-     onclick="closeAlertModalFromOverlay(event)">
+     aria-hidden="true">
 
     <div class="alert-modal-dialog">
 
         <header class="alert-modal-header">
 
             <div>
-
-                <span class="alerts-eyebrow">
-                    SECURITY INCIDENT INVESTIGATION
+                <span class="alerts-panel-label">
+                    AI INCIDENT INVESTIGATION
                 </span>
 
                 <h2 id="modalAlertTitle">
-                    Alert Review
+                    Alert details
                 </h2>
-
             </div>
 
             <button type="button"
@@ -1329,93 +551,58 @@
 
                 <div class="alert-preview-box"></div>
 
-                <span id="alertPreviewLabel"
-                      class="alert-preview-label">
-                    AI DETECTION
-                </span>
+                <div id="modalPreviewLabel"
+                     class="alert-preview-label">
+                    OBJECT DETECTED
+                </div>
 
             </div>
 
             <div class="alert-detail-grid">
 
                 <div class="alert-detail-item">
-
-                    <span>Camera</span>
-
-                    <strong id="modalAlertCamera">
-                        —
-                    </strong>
-
+                    <span>Alert ID</span>
+                    <strong id="modalAlertId">—</strong>
                 </div>
 
                 <div class="alert-detail-item">
-
-                    <span>Location</span>
-
-                    <strong id="modalAlertLocation">
-                        —
-                    </strong>
-
+                    <span>Alert type</span>
+                    <strong id="modalAlertType">—</strong>
                 </div>
 
                 <div class="alert-detail-item">
-
                     <span>Object</span>
-
-                    <strong id="modalAlertObject">
-                        —
-                    </strong>
-
+                    <strong id="modalObjectType">—</strong>
                 </div>
 
                 <div class="alert-detail-item">
+                    <span>Camera</span>
+                    <strong id="modalCamera">—</strong>
+                </div>
 
+                <div class="alert-detail-item">
+                    <span>Location</span>
+                    <strong id="modalLocation">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
                     <span>Confidence</span>
-
-                    <strong id="modalAlertConfidence">
-                        —
-                    </strong>
-
+                    <strong id="modalConfidence">—</strong>
                 </div>
 
                 <div class="alert-detail-item">
-
                     <span>Severity</span>
-
-                    <strong id="modalAlertSeverity">
-                        —
-                    </strong>
-
+                    <strong id="modalSeverity">—</strong>
                 </div>
 
                 <div class="alert-detail-item">
-
                     <span>Status</span>
-
-                    <strong id="modalAlertStatus">
-                        —
-                    </strong>
-
+                    <strong id="modalStatus">—</strong>
                 </div>
 
                 <div class="alert-detail-item">
-
-                    <span>Detected at</span>
-
-                    <strong id="modalAlertDetected">
-                        —
-                    </strong>
-
-                </div>
-
-                <div class="alert-detail-item">
-
-                    <span>AI engine</span>
-
-                    <strong>
-                        YOLO SECURITY
-                    </strong>
-
+                    <span>Detected</span>
+                    <strong id="modalDetected">—</strong>
                 </div>
 
             </div>
@@ -1428,88 +615,99 @@
 
 <div id="alertToast"
      class="alert-toast">
-    Alert intelligence refreshed successfully.
+    Alert records refreshed successfully.
 </div>
 
-<script>
-    document.addEventListener(
-        "DOMContentLoaded",
-        function () {
-            updateAlertsClock();
+@section Scripts {
 
-            window.setInterval(
-                updateAlertsClock,
-                1000
-            );
+    <script>
+        let selectedAlertRow = null;
+
+        function updateAlertsClock() {
+            const now = new Date();
+
+            const clock =
+                document.getElementById("alertsClock");
+
+            const date =
+                document.getElementById("alertsDate");
+
+            if (clock) {
+                clock.textContent =
+                    now.toLocaleTimeString(
+                        [],
+                        {
+                            hour12: false
+                        }
+                    );
+            }
+
+            if (date) {
+                date.textContent =
+                    now.toLocaleDateString(
+                        [],
+                        {
+                            weekday: "long",
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric"
+                        }
+                    );
+            }
         }
-    );
 
-    function updateAlertsClock() {
-        const clock =
-            document.getElementById(
-                "alertsClock"
-            );
+        function filterAlerts() {
+            const search =
+                document
+                    .getElementById("alertSearch")
+                    .value
+                    .trim()
+                    .toLowerCase();
 
-        if (!clock) {
-            return;
-        }
+            const severity =
+                document
+                    .getElementById("severityFilter")
+                    .value;
 
-        clock.textContent =
-            new Date().toLocaleTimeString(
-                [],
-                {
-                    hour12: false
-                }
-            );
-    }
+            const status =
+                document
+                    .getElementById("statusFilter")
+                    .value;
 
-    function filterAlerts() {
-        const searchValue =
-            document
-                .getElementById(
-                    "alertSearch"
-                )
-                .value
-                .toLowerCase()
-                .trim();
+            const rows =
+                Array.from(
+                    document.querySelectorAll(
+                        "#alertsTable tbody .alert-row"
+                    )
+                );
 
-        const severityValue =
-            document
-                .getElementById(
-                    "severityFilter"
-                )
-                .value;
+            let visibleCount = 0;
 
-        const statusValue =
-            document
-                .getElementById(
-                    "statusFilter"
-                )
-                .value;
-
-        const rows =
-            document.querySelectorAll(
-                "#alertsTable tbody tr"
-            );
-
-        let visibleRows = 0;
-
-        rows.forEach(
-            function (row) {
-                const rowText =
-                    row.innerText.toLowerCase();
+            rows.forEach(function (row) {
+                const searchableText =
+                    [
+                        row.dataset.alertId,
+                        row.dataset.alertType,
+                        row.dataset.camera,
+                        row.dataset.location,
+                        row.dataset.object,
+                        row.dataset.severityName,
+                        row.dataset.statusName
+                    ]
+                        .join(" ")
+                        .toLowerCase();
 
                 const matchesSearch =
-                    searchValue === "" ||
-                    rowText.includes(searchValue);
+                    !search ||
+                    searchableText.includes(search);
 
                 const matchesSeverity =
-                    severityValue === "" ||
-                    row.dataset.severity === severityValue;
+                    !severity ||
+                    row.dataset.severity === severity;
 
                 const matchesStatus =
-                    statusValue === "" ||
-                    row.dataset.status === statusValue;
+                    !status ||
+                    row.dataset.status === status;
 
                 const shouldShow =
                     matchesSearch &&
@@ -1522,176 +720,213 @@
                         : "none";
 
                 if (shouldShow) {
-                    visibleRows++;
+                    visibleCount++;
+                }
+            });
+
+            document.getElementById(
+                "alertsResultCount"
+            ).textContent =
+                visibleCount + " records";
+
+            document.getElementById(
+                "alertsNoResults"
+            ).style.display =
+                visibleCount === 0
+                    ? "block"
+                    : "none";
+        }
+
+        function clearAlertFilters() {
+            document.getElementById(
+                "alertSearch"
+            ).value = "";
+
+            document.getElementById(
+                "severityFilter"
+            ).value = "";
+
+            document.getElementById(
+                "statusFilter"
+            ).value = "";
+
+            filterAlerts();
+        }
+
+        function openAlertModal(button) {
+            selectedAlertRow =
+                button.closest("tr");
+
+            if (!selectedAlertRow) {
+                return;
+            }
+
+            const row =
+                selectedAlertRow;
+
+            document.getElementById(
+                "modalAlertTitle"
+            ).textContent =
+                row.dataset.alertType ||
+                "Alert details";
+
+            document.getElementById(
+                "modalAlertId"
+            ).textContent =
+                "#" +
+                (
+                    row.dataset.alertId ||
+                    "—"
+                );
+
+            document.getElementById(
+                "modalAlertType"
+            ).textContent =
+                row.dataset.alertType ||
+                "—";
+
+            document.getElementById(
+                "modalObjectType"
+            ).textContent =
+                row.dataset.object ||
+                "—";
+
+            document.getElementById(
+                "modalCamera"
+            ).textContent =
+                row.dataset.camera ||
+                "—";
+
+            document.getElementById(
+                "modalLocation"
+            ).textContent =
+                row.dataset.location ||
+                "—";
+
+            document.getElementById(
+                "modalConfidence"
+            ).textContent =
+                (
+                    row.dataset.confidence ||
+                    "0"
+                ) +
+                "%";
+
+            document.getElementById(
+                "modalSeverity"
+            ).textContent =
+                row.dataset.severityName ||
+                "—";
+
+            document.getElementById(
+                "modalStatus"
+            ).textContent =
+                row.dataset.statusName ||
+                "—";
+
+            document.getElementById(
+                "modalDetected"
+            ).textContent =
+                row.dataset.detected ||
+                "—";
+
+            document.getElementById(
+                "modalPreviewLabel"
+            ).textContent =
+                (
+                    row.dataset.object ||
+                    "OBJECT"
+                ).toUpperCase() +
+                " " +
+                (
+                    row.dataset.confidence ||
+                    "0"
+                ) +
+                "%";
+
+            const modal =
+                document.getElementById(
+                    "alertModal"
+                );
+
+            modal.classList.add("open");
+
+            modal.setAttribute(
+                "aria-hidden",
+                "false"
+            );
+
+            document.body.classList.add(
+                "modal-open"
+            );
+        }
+
+        function closeAlertModal() {
+            const modal =
+                document.getElementById(
+                    "alertModal"
+                );
+
+            modal.classList.remove("open");
+
+            modal.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+            document.body.classList.remove(
+                "modal-open"
+            );
+
+            selectedAlertRow = null;
+        }
+
+        function refreshAlerts() {
+            const toast =
+                document.getElementById(
+                    "alertToast"
+                );
+
+            toast.classList.add("show");
+
+            window.setTimeout(
+                function () {
+                    toast.classList.remove(
+                        "show"
+                    );
+                },
+                2500
+            );
+        }
+
+        document.addEventListener(
+            "keydown",
+            function (event) {
+                if (event.key === "Escape") {
+                    closeAlertModal();
                 }
             }
         );
 
-        document.getElementById(
-            "noAlertsMessage"
-        ).style.display =
-            visibleRows === 0
-                ? "block"
-                : "none";
-
-        document.getElementById(
-            "alertsResultCount"
-        ).textContent =
-            visibleRows +
-            " records";
-    }
-
-    function clearAlertFilters() {
-        document.getElementById(
-            "alertSearch"
-        ).value = "";
-
-        document.getElementById(
-            "severityFilter"
-        ).value = "";
-
-        document.getElementById(
-            "statusFilter"
-        ).value = "";
-
-        filterAlerts();
-
-        showAlertToast(
-            "Alert filters cleared."
-        );
-    }
-
-    function refreshAlerts() {
-        showAlertToast(
-            "Alert intelligence refreshed successfully."
-        );
-    }
-
-    function openAlertModal(button) {
-        const row =
-            button.closest("tr");
-
-        if (!row) {
-            return;
-        }
-
-        document.getElementById(
-            "modalAlertTitle"
-        ).textContent =
-            "Alert #" +
-            row.dataset.alertId +
-            " — " +
-            row.dataset.alertType;
-
-        document.getElementById(
-            "modalAlertCamera"
-        ).textContent =
-            row.dataset.camera ||
-            "—";
-
-        document.getElementById(
-            "modalAlertLocation"
-        ).textContent =
-            row.dataset.location ||
-            "—";
-
-        document.getElementById(
-            "modalAlertObject"
-        ).textContent =
-            row.dataset.object ||
-            "—";
-
-        document.getElementById(
-            "modalAlertConfidence"
-        ).textContent =
-            (row.dataset.confidence ||
-                "0") +
-            "%";
-
-        document.getElementById(
-            "modalAlertSeverity"
-        ).textContent =
-            row.dataset.severityName ||
-            "—";
-
-        document.getElementById(
-            "modalAlertStatus"
-        ).textContent =
-            row.dataset.statusName ||
-            "—";
-
-        document.getElementById(
-            "modalAlertDetected"
-        ).textContent =
-            row.dataset.detected ||
-            "—";
-
-        document.getElementById(
-            "alertPreviewLabel"
-        ).textContent =
-            (
-                row.dataset.object ||
-                "OBJECT"
-            ).toUpperCase() +
-            " DETECTED";
-
-        document.getElementById(
-            "alertModal"
-        ).classList.add("open");
-
-        document.body.style.overflow =
-            "hidden";
-    }
-
-    function closeAlertModal() {
-        document.getElementById(
-            "alertModal"
-        ).classList.remove("open");
-
-        document.body.style.overflow =
-            "";
-    }
-
-    function closeAlertModalFromOverlay(
-        event
-    ) {
-        if (
-            event.target.id ===
-            "alertModal"
-        ) {
-            closeAlertModal();
-        }
-    }
-
-    function showAlertToast(message) {
-        const toast =
-            document.getElementById(
-                "alertToast"
+        document
+            .getElementById("alertModal")
+            .addEventListener(
+                "click",
+                function (event) {
+                    if (event.target === this) {
+                        closeAlertModal();
+                    }
+                }
             );
 
-        toast.textContent =
-            message;
-             
-        toast.classList.add(
-            "show"
+        updateAlertsClock();
+
+        window.setInterval(
+            updateAlertsClock,
+            1000
         );
 
-        window.setTimeout(
-            function () {
-                toast.classList.remove(
-                    "show"
-                );
-            },
-            3000
-        );
-    }
+        filterAlerts();
+    </script>
 
-    document.addEventListener(
-        "keydown",
-        function (event) {
-            if (event.key === "Escape") {
-                closeAlertModal();
-            }
-        }
-    );
-</script>
+}
