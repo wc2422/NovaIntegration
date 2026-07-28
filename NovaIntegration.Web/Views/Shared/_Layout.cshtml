@@ -3,7 +3,8 @@
         ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
 
     string dashboardClass =
-        currentController == "Dashboard" || currentController == "Home"
+        currentController == "Dashboard" ||
+        currentController == "Home"
             ? "active"
             : "";
 
@@ -28,12 +29,15 @@
 <html lang="en">
 
 <head>
+
     <meta charset="utf-8" />
 
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0" />
 
-    <title>@ViewData["Title"] - NovaIntegration</title>
+    <title>
+        @ViewData["Title"] - NovaIntegration
+    </title>
 
     <link rel="stylesheet"
           href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
@@ -43,19 +47,27 @@
           asp-append-version="true" />
 
     <link rel="stylesheet"
-          href="~/css/advanced-alerts-detection.css"
+          href="~/css/simple-theme.css"
           asp-append-version="true" />
+
 </head>
 
 <body>
 
-    <div class="sidebar">
+    <aside class="sidebar">
 
         <div class="sidebar-brand">
 
             <div>
-                <h2>NovaIntegration</h2>
-                <p>AI Security System</p>
+
+                <h2>
+                    NovaIntegration
+                </h2>
+
+                <p>
+                    AI Security System
+                </p>
+
             </div>
 
         </div>
@@ -66,8 +78,13 @@
                asp-controller="Dashboard"
                asp-action="Index">
 
-                <span class="sidebar-icon">▦</span>
-                <span>Dashboard</span>
+                <span class="sidebar-icon">
+                    ▦
+                </span>
+
+                <span>
+                    Dashboard
+                </span>
 
             </a>
 
@@ -75,8 +92,13 @@
                asp-controller="Cameras"
                asp-action="Index">
 
-                <span class="sidebar-icon">◉</span>
-                <span>Cameras</span>
+                <span class="sidebar-icon">
+                    ◉
+                </span>
+
+                <span>
+                    Cameras
+                </span>
 
             </a>
 
@@ -84,8 +106,13 @@
                asp-controller="Alerts"
                asp-action="Index">
 
-                <span class="sidebar-icon">!</span>
-                <span>Alerts</span>
+                <span class="sidebar-icon">
+                    !
+                </span>
+
+                <span>
+                    Alerts
+                </span>
 
             </a>
 
@@ -93,8 +120,13 @@
                asp-controller="DetectionLogs"
                asp-action="Index">
 
-                <span class="sidebar-icon">≡</span>
-                <span>Detection Logs</span>
+                <span class="sidebar-icon">
+                    ≡
+                </span>
+
+                <span>
+                    Detection Logs
+                </span>
 
             </a>
 
@@ -105,21 +137,35 @@
             <span class="status-dot"></span>
 
             <div>
-                <strong>System Online</strong>
-                <small>AI monitoring active</small>
+
+                <strong>
+                    System Online
+                </strong>
+
+                <small>
+                    AI monitoring active
+                </small>
+
             </div>
 
         </div>
 
-    </div>
+    </aside>
 
     <div class="main-content">
 
         <header class="topbar">
 
             <div>
-                <h3>@ViewData["Title"]</h3>
-                <p>AI-Assisted Security Dashboard</p>
+
+                <h3>
+                    @ViewData["Title"]
+                </h3>
+
+                <p>
+                    AI-Assisted Security Dashboard
+                </p>
+
             </div>
 
             <div class="topbar-right">
@@ -128,7 +174,9 @@
 
                     <span class="status-dot"></span>
 
-                    Live Monitoring
+                    <span>
+                        Live Monitoring
+                    </span>
 
                 </div>
 
@@ -144,9 +192,11 @@
 
     </div>
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/jquery/dist/jquery.min.js">
+    </script>
 
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js">
+    </script>
 
     <script src="~/js/site.js"
             asp-append-version="true">
