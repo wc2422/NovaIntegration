@@ -1,14 +1,20 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
-#include <opencv4/opencv2/opencv.hpp>	//Header file path may vary
+#include <opencv2/opencv.hpp>
+#include <ctime>
 
 using namespace cv;
 using namespace std;
 
 int main() {
-	std::cout << "Check" << std::endl;
+	time_t currentTime;
+	time(&currentTime);
+	std::cout << "Start" << std::endl;
+	std::cout << ctime(&currentTime);
 
-	VideoCapture capture("rtsp://192.168.2.18:2544/live",cv::CAP_FFMPEG);	//REPLACE URL WITH YOUR OWN
-	
+
+	VideoCapture capture("rtsp://192.168.2.90:554", cv::CAP_FFMPEG);	//REPLACE URL WITH YOUR OWN
+
 	if(!capture.isOpened()) {
 		cout << "Error: Cannot open the RTSP stream" << endl;
 		return -1;
@@ -16,21 +22,28 @@ int main() {
 	
 	Mat frame;
 	
+	cv::VideoWriter output("C:\\data2\\output.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
+			30.0, cv::Size(1920, 1080));	//This has to match the input video resolution
+
 	while(true) {
 		bool isFrameGrabbed = capture.grab();
 		if(!isFrameGrabbed) {
-			cout << "Error: Cannot grab frame from RTSP frame" << endl;
+			cout << "Error: Cannot grab frame" << endl;
 			break;
 		}
-		
+
 		capture.retrieve(frame);
+		output.write(frame);
 		
-		imshow("RTSP Stream", frame);
+		//Display
+		imshow("Stream", frame);
 		if(waitKey(30) == 'q') {
 			break;
 		}
 	}
+
 	capture.release();
+	output.release();
 	destroyAllWindows();
 		
 	return 0;
