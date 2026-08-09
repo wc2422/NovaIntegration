@@ -1,0 +1,932 @@
+﻿@model List<NovaIntegration.Web.Models.Alert>
+
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Alerts";
+
+    List<NovaIntegration.Web.Models.Alert> alerts =
+        Model ?? new List<NovaIntegration.Web.Models.Alert>();
+
+    int totalAlerts = alerts.Count;
+
+    int openAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Status,
+            "Open",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int acknowledgedAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Status,
+            "Acknowledged",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int resolvedAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Status,
+            "Resolved",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int highAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Severity,
+            "High",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int mediumAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Severity,
+            "Medium",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int lowAlerts = alerts.Count(alert =>
+        string.Equals(
+            alert.Severity,
+            "Low",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    double averageConfidence =
+        totalAlerts > 0
+            ? alerts.Average(alert => alert.Confidence)
+            : 0;
+
+    double highPercentage =
+        totalAlerts > 0
+            ? highAlerts * 100.0 / totalAlerts
+            : 0;
+
+    double mediumPercentage =
+        totalAlerts > 0
+            ? mediumAlerts * 100.0 / totalAlerts
+            : 0;
+
+    double lowPercentage =
+        totalAlerts > 0
+            ? lowAlerts * 100.0 / totalAlerts
+            : 0;
+}
+
+<link rel="stylesheet"
+      href="~/css/advanced-alerts-detection.css"
+      asp-append-version="true" />
+
+<section class="alerts-soc-page">
+
+    <header class="alerts-header">
+
+        <div>
+            <span class="alerts-eyebrow">
+                NOVA SECURITY INCIDENT RESPONSE
+            </span>
+
+            <h1>Security Alert Centre</h1>
+
+            <p>
+                Review AI-generated security alerts, monitor severity,
+                investigate incidents and track response status.
+            </p>
+        </div>
+
+        <div class="alerts-header-actions">
+
+            <div class="alerts-clock">
+                <span>INCIDENT SYSTEM TIME</span>
+
+                <strong id="alertsClock">
+                    @DateTime.Now.ToString("HH:mm:ss")
+                </strong>
+
+                <small id="alertsDate">
+                    @DateTime.Now.ToString("dddd, dd MMM yyyy")
+                </small>
+            </div>
+
+            <button type="button"
+                    class="alerts-refresh-button"
+                    onclick="refreshAlerts()">
+                ↻ Refresh alerts
+            </button>
+
+        </div>
+
+    </header>
+
+    <section class="alerts-summary-grid">
+
+        <article class="alerts-summary-card">
+            <div class="alerts-summary-icon icon-blue">
+                AL
+            </div>
+
+            <div class="alerts-summary-content">
+                <span>Total alerts</span>
+                <strong>@totalAlerts</strong>
+                <small>All recorded incidents</small>
+            </div>
+        </article>
+
+        <article class="alerts-summary-card">
+            <div class="alerts-summary-icon icon-red">
+                !
+            </div>
+
+            <div class="alerts-summary-content">
+                <span>Open alerts</span>
+                <strong>@openAlerts</strong>
+                <small>Require immediate review</small>
+            </div>
+        </article>
+
+        <article class="alerts-summary-card">
+            <div class="alerts-summary-icon icon-orange">
+                ▲
+            </div>
+
+            <div class="alerts-summary-content">
+                <span>High priority</span>
+                <strong>@highAlerts</strong>
+                <small>Elevated-risk incidents</small>
+            </div>
+        </article>
+
+        <article class="alerts-summary-card">
+            <div class="alerts-summary-icon icon-purple">
+                %
+            </div>
+
+            <div class="alerts-summary-content">
+                <span>Average confidence</span>
+
+                <strong>
+                    @averageConfidence.ToString("0.0")%
+                </strong>
+
+                <small>AI confidence score</small>
+            </div>
+        </article>
+
+    </section>
+
+    <section class="alerts-filter-panel">
+
+        <div class="alerts-filter-grid">
+
+            <div class="alerts-search-box">
+
+                <span class="alerts-search-icon">
+                    ⌕
+                </span>
+
+                <input id="alertSearch"
+                       type="search"
+                       placeholder="Search alert, camera, location or object..."
+                       oninput="filterAlerts()" />
+
+            </div>
+
+            <select id="severityFilter"
+                    onchange="filterAlerts()">
+
+                <option value="">
+                    All severities
+                </option>
+
+                <option value="high">
+                    High
+                </option>
+
+                <option value="medium">
+                    Medium
+                </option>
+
+                <option value="low">
+                    Low
+                </option>
+
+            </select>
+
+            <select id="statusFilter"
+                    onchange="filterAlerts()">
+
+                <option value="">
+                    All statuses
+                </option>
+
+                <option value="open">
+                    Open
+                </option>
+
+                <option value="acknowledged">
+                    Acknowledged
+                </option>
+
+                <option value="resolved">
+                    Resolved
+                </option>
+
+            </select>
+
+            <button type="button"
+                    class="alerts-clear-button"
+                    onclick="clearAlertFilters()">
+                Clear filters
+            </button>
+
+        </div>
+
+    </section>
+
+    <section class="alerts-main-grid">
+
+        <article class="alerts-table-panel">
+
+            <header class="alerts-panel-header">
+
+                <div>
+                    <span class="alerts-panel-label">
+                        INCIDENT QUEUE
+                    </span>
+
+                    <h2>Alert Investigation Records</h2>
+                </div>
+
+                <span id="alertsResultCount"
+                      class="alerts-result-count">
+                    @totalAlerts records
+                </span>
+
+            </header>
+
+            <div class="alerts-table-wrapper">
+
+                <table id="alertsTable"
+                       class="alerts-table">
+
+                    <thead>
+                        <tr>
+                            <th>Alert</th>
+                            <th>Camera and location</th>
+                            <th>Detection</th>
+                            <th>Confidence</th>
+                            <th>Severity</th>
+                            <th>Status</th>
+                            <th>Detected</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var alert in alerts)
+                        {
+                            string severity =
+                            string.IsNullOrWhiteSpace(alert.Severity)
+                            ? "Low"
+                            : alert.Severity;
+
+                            string status =
+                            string.IsNullOrWhiteSpace(alert.Status)
+                            ? "Open"
+                            : alert.Status;
+
+                            string severityClass =
+                            severity.ToLowerInvariant();
+
+                            string statusClass =
+                            status.ToLowerInvariant();
+
+                            string confidenceCss =
+                            alert.Confidence.ToString(
+                            "0.0",
+                            CultureInfo.InvariantCulture
+                            );
+
+                            <tr class="alert-row"
+                                data-severity="@severityClass"
+                                data-status="@statusClass"
+                                data-alert-id="@alert.AlertId"
+                                data-alert-type="@alert.AlertType"
+                                data-camera="@alert.CameraName"
+                                data-location="@alert.Location"
+                                data-object="@alert.ObjectType"
+                                data-confidence="@confidenceCss"
+                                data-severity-name="@severity"
+                                data-status-name="@status"
+                                data-detected="@alert.DetectedAt.ToString("dd MMM yyyy, hh:mm tt")">
+
+                                <td>
+                                    <span class="alert-primary alert-code">
+                                        #@alert.AlertId
+                                    </span>
+
+                                    <span class="alert-secondary">
+                                        @alert.AlertType
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="alert-primary">
+                                        @alert.CameraName
+                                    </span>
+
+                                    <span class="alert-secondary">
+                                        @alert.Location
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="alert-primary">
+                                        @alert.ObjectType
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <div class="alert-confidence">
+
+                                        <strong>
+                                            @alert.Confidence.ToString("0.0")%
+                                        </strong>
+
+                                        <div class="confidence-track">
+                                            <div class="confidence-fill"
+                                                 style="width: @confidenceCss%">
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <span class="alert-badge severity-@severityClass">
+                                        <i></i>
+                                        @severity
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="alert-badge status-@statusClass">
+                                        <i></i>
+                                        @status
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="alert-primary">
+                                        @alert.DetectedAt.ToString("dd MMM yyyy")
+                                    </span>
+
+                                    <span class="alert-secondary">
+                                        @alert.DetectedAt.ToString("hh:mm:ss tt")
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <button type="button"
+                                            class="alert-review-button"
+                                            onclick="openAlertModal(this)">
+                                        Investigate
+                                    </button>
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+                <div id="alertsNoResults"
+                     class="alerts-no-results">
+
+                    No alerts match the selected filters.
+
+                </div>
+
+            </div>
+
+        </article>
+
+        <aside class="alerts-analysis-panel">
+
+            <header class="alerts-panel-header">
+
+                <div>
+                    <span class="alerts-panel-label">
+                        THREAT ANALYSIS
+                    </span>
+
+                    <h2>Severity Distribution</h2>
+                </div>
+
+                <span class="alerts-result-count">
+                    LIVE
+                </span>
+
+            </header>
+
+            <div class="alerts-analysis-content">
+
+                <div class="analysis-item">
+
+                    <div class="analysis-heading">
+                        <span>High risk</span>
+                        <strong>@highAlerts</strong>
+                    </div>
+
+                    <div class="analysis-track">
+                        <div class="analysis-fill analysis-high"
+                             style="width: @highPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="analysis-item">
+
+                    <div class="analysis-heading">
+                        <span>Medium risk</span>
+                        <strong>@mediumAlerts</strong>
+                    </div>
+
+                    <div class="analysis-track">
+                        <div class="analysis-fill analysis-medium"
+                             style="width: @mediumPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="analysis-item">
+
+                    <div class="analysis-heading">
+                        <span>Low risk</span>
+                        <strong>@lowAlerts</strong>
+                    </div>
+
+                    <div class="analysis-track">
+                        <div class="analysis-fill analysis-low"
+                             style="width: @lowPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="analysis-item">
+
+                    <div class="analysis-heading">
+                        <span>Open</span>
+                        <strong>@openAlerts</strong>
+                    </div>
+
+                </div>
+
+                <div class="analysis-item">
+
+                    <div class="analysis-heading">
+                        <span>Acknowledged</span>
+                        <strong>@acknowledgedAlerts</strong>
+                    </div>
+
+                </div>
+
+                <div class="analysis-item">
+
+                    <div class="analysis-heading">
+                        <span>Resolved</span>
+                        <strong>@resolvedAlerts</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </aside>
+
+    </section>
+
+</section>
+
+<div id="alertModal"
+     class="alert-modal"
+     aria-hidden="true">
+
+    <div class="alert-modal-dialog">
+
+        <header class="alert-modal-header">
+
+            <div>
+                <span class="alerts-panel-label">
+                    AI INCIDENT INVESTIGATION
+                </span>
+
+                <h2 id="modalAlertTitle">
+                    Alert details
+                </h2>
+            </div>
+
+            <button type="button"
+                    class="alert-modal-close"
+                    onclick="closeAlertModal()">
+                ×
+            </button>
+
+        </header>
+
+        <div class="alert-modal-body">
+
+            <div class="alert-preview">
+
+                <div class="alert-preview-box"></div>
+
+                <div id="modalPreviewLabel"
+                     class="alert-preview-label">
+                    OBJECT DETECTED
+                </div>
+
+            </div>
+
+            <div class="alert-detail-grid">
+
+                <div class="alert-detail-item">
+                    <span>Alert ID</span>
+                    <strong id="modalAlertId">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Alert type</span>
+                    <strong id="modalAlertType">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Object</span>
+                    <strong id="modalObjectType">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Camera</span>
+                    <strong id="modalCamera">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Location</span>
+                    <strong id="modalLocation">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Confidence</span>
+                    <strong id="modalConfidence">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Severity</span>
+                    <strong id="modalSeverity">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Status</span>
+                    <strong id="modalStatus">—</strong>
+                </div>
+
+                <div class="alert-detail-item">
+                    <span>Detected</span>
+                    <strong id="modalDetected">—</strong>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div id="alertToast"
+     class="alert-toast">
+    Alert records refreshed successfully.
+</div>
+
+@section Scripts {
+
+    <script>
+        let selectedAlertRow = null;
+
+        function updateAlertsClock() {
+            const now = new Date();
+
+            const clock =
+                document.getElementById("alertsClock");
+
+            const date =
+                document.getElementById("alertsDate");
+
+            if (clock) {
+                clock.textContent =
+                    now.toLocaleTimeString(
+                        [],
+                        {
+                            hour12: false
+                        }
+                    );
+            }
+
+            if (date) {
+                date.textContent =
+                    now.toLocaleDateString(
+                        [],
+                        {
+                            weekday: "long",
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric"
+                        }
+                    );
+            }
+        }
+
+        function filterAlerts() {
+            const search =
+                document
+                    .getElementById("alertSearch")
+                    .value
+                    .trim()
+                    .toLowerCase();
+
+            const severity =
+                document
+                    .getElementById("severityFilter")
+                    .value;
+
+            const status =
+                document
+                    .getElementById("statusFilter")
+                    .value;
+
+            const rows =
+                Array.from(
+                    document.querySelectorAll(
+                        "#alertsTable tbody .alert-row"
+                    )
+                );
+
+            let visibleCount = 0;
+
+            rows.forEach(function (row) {
+                const searchableText =
+                    [
+                        row.dataset.alertId,
+                        row.dataset.alertType,
+                        row.dataset.camera,
+                        row.dataset.location,
+                        row.dataset.object,
+                        row.dataset.severityName,
+                        row.dataset.statusName
+                    ]
+                        .join(" ")
+                        .toLowerCase();
+
+                const matchesSearch =
+                    !search ||
+                    searchableText.includes(search);
+
+                const matchesSeverity =
+                    !severity ||
+                    row.dataset.severity === severity;
+
+                const matchesStatus =
+                    !status ||
+                    row.dataset.status === status;
+
+                const shouldShow =
+                    matchesSearch &&
+                    matchesSeverity &&
+                    matchesStatus;
+
+                row.style.display =
+                    shouldShow
+                        ? ""
+                        : "none";
+
+                if (shouldShow) {
+                    visibleCount++;
+                }
+            });
+
+            document.getElementById(
+                "alertsResultCount"
+            ).textContent =
+                visibleCount + " records";
+
+            document.getElementById(
+                "alertsNoResults"
+            ).style.display =
+                visibleCount === 0
+                    ? "block"
+                    : "none";
+        }
+
+        function clearAlertFilters() {
+            document.getElementById(
+                "alertSearch"
+            ).value = "";
+
+            document.getElementById(
+                "severityFilter"
+            ).value = "";
+
+            document.getElementById(
+                "statusFilter"
+            ).value = "";
+
+            filterAlerts();
+        }
+
+        function openAlertModal(button) {
+            selectedAlertRow =
+                button.closest("tr");
+
+            if (!selectedAlertRow) {
+                return;
+            }
+
+            const row =
+                selectedAlertRow;
+
+            document.getElementById(
+                "modalAlertTitle"
+            ).textContent =
+                row.dataset.alertType ||
+                "Alert details";
+
+            document.getElementById(
+                "modalAlertId"
+            ).textContent =
+                "#" +
+                (
+                    row.dataset.alertId ||
+                    "—"
+                );
+
+            document.getElementById(
+                "modalAlertType"
+            ).textContent =
+                row.dataset.alertType ||
+                "—";
+
+            document.getElementById(
+                "modalObjectType"
+            ).textContent =
+                row.dataset.object ||
+                "—";
+
+            document.getElementById(
+                "modalCamera"
+            ).textContent =
+                row.dataset.camera ||
+                "—";
+
+            document.getElementById(
+                "modalLocation"
+            ).textContent =
+                row.dataset.location ||
+                "—";
+
+            document.getElementById(
+                "modalConfidence"
+            ).textContent =
+                (
+                    row.dataset.confidence ||
+                    "0"
+                ) +
+                "%";
+
+            document.getElementById(
+                "modalSeverity"
+            ).textContent =
+                row.dataset.severityName ||
+                "—";
+
+            document.getElementById(
+                "modalStatus"
+            ).textContent =
+                row.dataset.statusName ||
+                "—";
+
+            document.getElementById(
+                "modalDetected"
+            ).textContent =
+                row.dataset.detected ||
+                "—";
+
+            document.getElementById(
+                "modalPreviewLabel"
+            ).textContent =
+                (
+                    row.dataset.object ||
+                    "OBJECT"
+                ).toUpperCase() +
+                " " +
+                (
+                    row.dataset.confidence ||
+                    "0"
+                ) +
+                "%";
+
+            const modal =
+                document.getElementById(
+                    "alertModal"
+                );
+
+            modal.classList.add("open");
+
+            modal.setAttribute(
+                "aria-hidden",
+                "false"
+            );
+
+            document.body.classList.add(
+                "modal-open"
+            );
+        }
+
+        function closeAlertModal() {
+            const modal =
+                document.getElementById(
+                    "alertModal"
+                );
+
+            modal.classList.remove("open");
+
+            modal.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+            document.body.classList.remove(
+                "modal-open"
+            );
+
+            selectedAlertRow = null;
+        }
+
+        function refreshAlerts() {
+            const toast =
+                document.getElementById(
+                    "alertToast"
+                );
+
+            toast.classList.add("show");
+
+            window.setTimeout(
+                function () {
+                    toast.classList.remove(
+                        "show"
+                    );
+                },
+                2500
+            );
+        }
+
+        document.addEventListener(
+            "keydown",
+            function (event) {
+                if (event.key === "Escape") {
+                    closeAlertModal();
+                }
+            }
+        );
+
+        document
+            .getElementById("alertModal")
+            .addEventListener(
+                "click",
+                function (event) {
+                    if (event.target === this) {
+                        closeAlertModal();
+                    }
+                }
+            );
+
+        updateAlertsClock();
+
+        window.setInterval(
+            updateAlertsClock,
+            1000
+        );
+
+        filterAlerts();
+    </script>
+
+}
