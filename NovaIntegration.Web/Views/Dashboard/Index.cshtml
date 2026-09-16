@@ -756,31 +756,36 @@
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        updateDashboardClock();
-        renderDashboardActivityChart();
+                        document.addEventListener("DOMContentLoaded", function () {
+                       
+                        updateDashboardClock();
+                        renderDashboardActivityChart();
 
-        window.setInterval(updateDashboardClock, 1000);
-        window.setInterval(addDashboardLiveEvent, 8000);
+                        window.setInterval(updateDashboardClock, 1000);
+                        window.setInterval(addDashboardLiveEvent, 8000);
 
-        const feedImg = document.getElementById("liveCameraFeed");
+                        
+                        const feedImg = document.getElementById("liveCameraFeed");
 
-        if (feedImg) {
-            function fetchNextFrame() {
-                feedImg.src = "/Cameras/GetLiveFrame?t=" + new Date().getTime();
-            }
+                        if (feedImg) {
+                            function fetchNextFrame() {
+                                feedImg.src = "/Cameras/GetLiveFrame?t=" + new Date().getTime();
+                            }
 
-            feedImg.onload = function () {
-                setTimeout(fetchNextFrame, 30);
-            };
+                           
+                            feedImg.onload = function () {
+                                setTimeout(fetchNextFrame, 30);
+                            };
 
-            feedImg.onerror = function () {
-                setTimeout(fetchNextFrame, 100);
-            };
+                           
+                            feedImg.onerror = function () {
+                                setTimeout(fetchNextFrame, 100);
+                            };
 
-            fetchNextFrame();
-        }
-    });
+                            
+                            fetchNextFrame();
+                        }
+                    });
 
     function updateDashboardClock() {
         const now = new Date();

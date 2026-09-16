@@ -1,0 +1,1683 @@
+﻿@model List<NovaIntegration.Web.Models.Detection>
+
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Detection Logs";
+
+    List<NovaIntegration.Web.Models.Detection> detections =
+        Model ?? new List<NovaIntegration.Web.Models.Detection>();
+
+    int totalCount = detections.Count;
+
+    int criticalCount = detections.Count(detection =>
+        string.Equals(
+            detection.Severity,
+            "Critical",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int highCount = detections.Count(detection =>
+        string.Equals(
+            detection.Severity,
+            "High",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int mediumCount = detections.Count(detection =>
+        string.Equals(
+            detection.Severity,
+            "Medium",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int lowCount = detections.Count(detection =>
+        string.Equals(
+            detection.Severity,
+            "Low",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int pendingCount = detections.Count(detection =>
+        string.Equals(
+            detection.Status,
+            "Pending",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int escalatedCount = detections.Count(detection =>
+        string.Equals(
+            detection.Status,
+            "Escalated",
+            StringComparison.OrdinalIgnoreCase
+        )
+    );
+
+    int todayCount = detections.Count(detection =>
+        detection.DetectedAt.Date == DateTime.Today
+    );
+
+    double averageConfidence =
+        totalCount > 0
+            ? detections.Average(
+                detection => detection.Confidence
+            )
+            : 0;
+
+    double criticalPercentage =
+        totalCount > 0
+            ? criticalCount * 100.0 / totalCount
+            : 0;
+
+    double highPercentage =
+        totalCount > 0
+            ? highCount * 100.0 / totalCount
+            : 0;
+
+    double mediumPercentage =
+        totalCount > 0
+            ? mediumCount * 100.0 / totalCount
+            : 0;
+
+    double lowPercentage =
+        totalCount > 0
+            ? lowCount * 100.0 / totalCount
+            : 0;
+
+    double criticalEnd =
+        criticalPercentage;
+
+    double highEnd =
+        criticalPercentage +
+        highPercentage;
+
+    double mediumEnd =
+        criticalPercentage +
+        highPercentage +
+        mediumPercentage;
+
+    string criticalEndCss =
+        criticalEnd.ToString(
+            "0.##",
+            CultureInfo.InvariantCulture
+        );
+
+    string highEndCss =
+        highEnd.ToString(
+            "0.##",
+            CultureInfo.InvariantCulture
+        );
+
+    string mediumEndCss =
+        mediumEnd.ToString(
+            "0.##",
+            CultureInfo.InvariantCulture
+        );
+}
+
+<link rel="stylesheet"
+      href="~/css/advanced-alerts-detection.css"
+      asp-append-version="true" />
+
+<section class="advanced-logs-page">
+
+    <header class="logs-page-heading">
+
+        <div>
+            <span class="page-eyebrow">
+                SECURITY OPERATIONS CENTRE
+            </span>
+
+            <h1>AI Detection Logs</h1>
+
+            <p>
+                Monitor, investigate and review AI-generated security
+                detections across all connected surveillance cameras.
+            </p>
+        </div>
+
+        <div class="logs-heading-actions">
+
+            <button type="button"
+                    class="secondary-action-button"
+                    onclick="refreshDetectionLogs()">
+                ↻ Refresh
+            </button>
+
+            <button type="button"
+                    class="primary-action-button"
+                    onclick="exportDetectionLogs()">
+                ⇩ Export CSV
+            </button>
+
+        </div>
+
+    </header>
+
+    <section class="logs-status-banner">
+
+        <div class="logs-status-left">
+
+            <span class="logs-live-indicator">
+            </span>
+
+            <div>
+                <strong>
+                    Live detection monitoring is active
+                </strong>
+
+                <small>
+                    Last synchronisation:
+                    <span id="lastSyncTime">
+                        @DateTime.Now.ToString("hh:mm:ss tt")
+                    </span>
+                </small>
+            </div>
+
+        </div>
+
+        <div class="logs-system-health">
+            <span>System health</span>
+            <strong>98.7%</strong>
+        </div>
+
+    </section>
+
+    <section class="logs-summary-grid">
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-blue">
+                ◎
+            </div>
+
+            <div class="summary-card-content">
+                <span>Total detections</span>
+                <strong>@totalCount</strong>
+                <small>@todayCount recorded today</small>
+            </div>
+
+        </article>
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-red">
+                !
+            </div>
+
+            <div class="summary-card-content">
+                <span>Critical events</span>
+                <strong>@criticalCount</strong>
+                <small>Require immediate review</small>
+            </div>
+
+        </article>
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-orange">
+                ◷
+            </div>
+
+            <div class="summary-card-content">
+                <span>Pending review</span>
+                <strong>@pendingCount</strong>
+                <small>@escalatedCount escalated events</small>
+            </div>
+
+        </article>
+
+        <article class="logs-summary-card">
+
+            <div class="summary-card-icon summary-icon-green">
+                %
+            </div>
+
+            <div class="summary-card-content">
+                <span>Average confidence</span>
+
+                <strong>
+                    @averageConfidence.ToString("0.0")%
+                </strong>
+
+                <small>Across all AI detections</small>
+            </div>
+
+        </article>
+
+    </section>
+
+    <section class="logs-intelligence-grid">
+
+        <article class="logs-panel">
+
+            <header class="panel-header">
+
+                <div>
+                    <span class="panel-eyebrow">
+                        RISK ANALYSIS
+                    </span>
+
+                    <h2>Severity Distribution</h2>
+                </div>
+
+                <span class="live-label">
+                    LIVE
+                </span>
+
+            </header>
+
+            <div class="risk-layout">
+
+                <div class="risk-donut"
+                     style="
+                        --critical: @criticalEndCss%;
+                        --high: @highEndCss%;
+                        --medium: @mediumEndCss%;
+                     ">
+
+                    <div class="risk-donut-centre">
+                        <strong>@totalCount</strong>
+                        <span>Events</span>
+                    </div>
+
+                </div>
+
+                <div class="risk-list">
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+                            <span>
+                                <i class="risk-dot risk-critical"></i>
+                                Critical
+                            </span>
+
+                            <strong>@criticalCount</strong>
+                        </div>
+
+                        <div class="risk-track">
+                            <div class="risk-fill risk-fill-critical"
+                                 style="width: @criticalPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+                            <span>
+                                <i class="risk-dot risk-high"></i>
+                                High
+                            </span>
+
+                            <strong>@highCount</strong>
+                        </div>
+
+                        <div class="risk-track">
+                            <div class="risk-fill risk-fill-high"
+                                 style="width: @highPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+                            <span>
+                                <i class="risk-dot risk-medium"></i>
+                                Medium
+                            </span>
+
+                            <strong>@mediumCount</strong>
+                        </div>
+
+                        <div class="risk-track">
+                            <div class="risk-fill risk-fill-medium"
+                                 style="width: @mediumPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="risk-item">
+
+                        <div class="risk-item-heading">
+                            <span>
+                                <i class="risk-dot risk-low"></i>
+                                Low
+                            </span>
+
+                            <strong>@lowCount</strong>
+                        </div>
+
+                        <div class="risk-track">
+                            <div class="risk-fill risk-fill-low"
+                                 style="width: @lowPercentage.ToString("0.##", CultureInfo.InvariantCulture)%">
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </article>
+
+        <article class="logs-panel">
+
+            <header class="panel-header">
+
+                <div>
+                    <span class="panel-eyebrow">
+                        REAL-TIME STREAM
+                    </span>
+
+                    <h2>Latest Event Feed</h2>
+                </div>
+
+                <span class="live-label">
+                    CONNECTED
+                </span>
+
+            </header>
+
+            <div id="liveEventFeed"
+                 class="live-event-feed">
+
+                @foreach (var detection in detections.Take(6))
+                {
+                    string eventSeverity =
+                    string.IsNullOrWhiteSpace(
+                    detection.Severity
+                    )
+                    ? "low"
+                    : detection
+                    .Severity
+                    .ToLowerInvariant();
+
+                    <div class="live-event-item">
+
+                        <span class="event-severity-line event-@eventSeverity">
+                        </span>
+
+                        <div class="event-feed-content">
+
+                            <strong>
+                                @detection.AlertType
+                            </strong>
+
+                            <small>
+                                @detection.CameraCode ·
+                                @detection.Location
+                            </small>
+
+                        </div>
+
+                        <time>
+                            @detection.DetectedAt.ToString("HH:mm:ss")
+                        </time>
+
+                    </div>
+                }
+
+            </div>
+
+        </article>
+
+    </section>
+
+    <section class="logs-panel records-panel">
+
+        <header class="records-header">
+
+            <div>
+                <h2>Detection Records</h2>
+
+                <p>
+                    Search, filter and investigate recorded security events.
+                </p>
+            </div>
+
+            <span class="record-count-label">
+
+                <span id="visibleRecordCount">
+                    @totalCount
+                </span>
+
+                records
+
+            </span>
+
+        </header>
+
+        <div class="logs-filter-grid">
+
+            <div class="logs-search-box">
+
+                <span class="search-symbol">
+                    ⌕
+                </span>
+
+                <input id="detectionSearch"
+                       type="search"
+                       placeholder="Search ID, camera, location, object or officer..."
+                       oninput="applyDetectionFilters()" />
+
+            </div>
+
+            <select id="cameraFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All cameras
+                </option>
+
+                @foreach (
+                                string camera in detections
+                                .Where(detection =>
+                                !string.IsNullOrWhiteSpace(
+                                detection.CameraName
+                                )
+                                )
+                                .Select(detection =>
+                                detection.CameraName
+                                )
+                                .Distinct()
+                                .OrderBy(camera => camera)
+                                )
+                {
+                    <option value="@camera.ToLowerInvariant()">
+                        @camera
+                    </option>
+                }
+
+            </select>
+
+            <select id="objectFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All objects
+                </option>
+
+                @foreach (
+                                string objectType in detections
+                                .Where(detection =>
+                                !string.IsNullOrWhiteSpace(
+                                detection.ObjectType
+                                )
+                                )
+                                .Select(detection =>
+                                detection.ObjectType
+                                )
+                                .Distinct()
+                                .OrderBy(objectType => objectType)
+                                )
+                {
+                    <option value="@objectType.ToLowerInvariant()">
+                        @objectType
+                    </option>
+                }
+
+            </select>
+
+            <select id="severityFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All severities
+                </option>
+
+                <option value="critical">
+                    Critical
+                </option>
+
+                <option value="high">
+                    High
+                </option>
+
+                <option value="medium">
+                    Medium
+                </option>
+
+                <option value="low">
+                    Low
+                </option>
+
+            </select>
+
+            <select id="statusFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All statuses
+                </option>
+
+                <option value="pending">
+                    Pending
+                </option>
+
+                <option value="reviewed">
+                    Reviewed
+                </option>
+
+                <option value="escalated">
+                    Escalated
+                </option>
+
+                <option value="resolved">
+                    Resolved
+                </option>
+
+            </select>
+
+            <select id="dateFilter"
+                    onchange="applyDetectionFilters()">
+
+                <option value="">
+                    All dates
+                </option>
+
+                <option value="today">
+                    Today
+                </option>
+
+                <option value="seven">
+                    Last 7 days
+                </option>
+
+                <option value="thirty">
+                    Last 30 days
+                </option>
+
+            </select>
+
+            <button type="button"
+                    class="clear-filter-button"
+                    onclick="clearDetectionFilters()">
+                Clear filters
+            </button>
+
+        </div>
+
+        <div class="logs-table-wrapper">
+
+            <table id="detectionLogsTable"
+                   class="advanced-logs-table">
+
+                <thead>
+                    <tr>
+                        <th>Detection</th>
+                        <th>Camera and location</th>
+                        <th>Object</th>
+                        <th>Confidence</th>
+                        <th>Risk</th>
+                        <th>Status</th>
+                        <th>AI model</th>
+                        <th>Assigned officer</th>
+                        <th>Detected</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var detection in detections)
+                    {
+                        string severity =
+                        string.IsNullOrWhiteSpace(
+                        detection.Severity
+                        )
+                        ? "Low"
+                        : detection.Severity;
+
+                        string status =
+                        string.IsNullOrWhiteSpace(
+                        detection.Status
+                        )
+                        ? "Pending"
+                        : detection.Status;
+
+                        string severityClass =
+                        severity.ToLowerInvariant();
+
+                        string statusClass =
+                        status.ToLowerInvariant();
+
+                        string cameraName =
+                        detection.CameraName ?? "";
+
+                        string objectType =
+                        detection.ObjectType ?? "";
+
+                        string assignedOfficer =
+                        string.IsNullOrWhiteSpace(
+                        detection.AssignedOfficer
+                        )
+                        ? "Unassigned"
+                        : detection.AssignedOfficer;
+
+                        string objectIcon =
+                        objectType switch
+                        {
+                            "Person" => "●",
+                            "Vehicle" => "◆",
+                            "Package" => "■",
+                            _ => "○"
+                        };
+
+                        string officerInitials =
+                        assignedOfficer == "Unassigned"
+                        ? "?"
+                        : string.Concat(
+                        assignedOfficer
+                        .Split(
+                        ' ',
+                        StringSplitOptions
+                        .RemoveEmptyEntries
+                        )
+                        .Take(2)
+                        .Select(name => name[0])
+                        );
+
+                        string confidenceCss =
+                        detection.Confidence.ToString(
+                        "0.0",
+                        CultureInfo.InvariantCulture
+                        );
+
+                        <tr class="detection-log-row"
+                            data-id="@detection.DetectionId"
+                            data-camera="@cameraName.ToLowerInvariant()"
+                            data-object="@objectType.ToLowerInvariant()"
+                            data-severity="@severityClass"
+                            data-status="@statusClass"
+                            data-date="@detection.DetectedAt.ToString("O")"
+                            data-tracking-id="@detection.TrackingId"
+                            data-frame-id="@detection.FrameId"
+                            data-camera-name="@detection.CameraName"
+                            data-camera-code="@detection.CameraCode"
+                            data-location="@detection.Location"
+                            data-zone="@detection.Zone"
+                            data-object-type="@detection.ObjectType"
+                            data-confidence="@confidenceCss"
+                            data-alert-type="@detection.AlertType"
+                            data-severity-name="@severity"
+                            data-status-name="@status"
+                            data-officer="@assignedOfficer"
+                            data-detected-at="@detection.DetectedAt.ToString("dd MMM yyyy, hh:mm tt")"
+                            data-notes="@detection.Notes"
+                            data-ai-model="@detection.AiModel"
+                            data-processing-time="@detection.ProcessingTimeMs.ToString("0.0", CultureInfo.InvariantCulture)"
+                            data-box-count="@detection.BoundingBoxCount">
+
+                            <td>
+
+                                <div class="detection-id-cell">
+
+                                    <div class="detection-thumbnail">
+
+                                        <span>
+                                            @objectIcon
+                                        </span>
+
+                                        <div class="scan-line">
+                                        </div>
+
+                                    </div>
+
+                                    <div>
+                                        <strong>
+                                            DET-@detection.DetectionId
+                                        </strong>
+
+                                        <small>
+                                            @detection.TrackingId
+                                        </small>
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <div class="camera-location-cell">
+
+                                    <strong>
+                                        @detection.CameraName
+                                    </strong>
+
+                                    <small>
+                                        @detection.CameraCode ·
+                                        @detection.Location
+                                    </small>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+                                <span class="object-type-badge">
+                                    @objectIcon
+                                    @detection.ObjectType
+                                </span>
+                            </td>
+
+                            <td>
+
+                                <div class="confidence-cell">
+
+                                    <div class="confidence-header">
+
+                                        <strong>
+                                            @detection.Confidence.ToString("0.0")%
+                                        </strong>
+
+                                        <small>
+                                            AI
+                                        </small>
+
+                                    </div>
+
+                                    <div class="confidence-track">
+
+                                        <div class="confidence-fill"
+                                             style="width: @confidenceCss%">
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+                                <span class="severity-badge severity-@severityClass">
+
+                                    <span class="badge-dot">
+                                    </span>
+
+                                    @severity
+
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="status-badge status-@statusClass">
+
+                                    <span class="badge-dot">
+                                    </span>
+
+                                    @status
+
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="camera-location-cell">
+
+                                    <strong>
+                                        @detection.AiModel
+                                    </strong>
+
+                                    <small>
+                                        @detection.ProcessingTimeMs.ToString("0.0") ms
+                                    </small>
+
+                                </span>
+                            </td>
+
+                            <td>
+
+                                <div class="officer-cell">
+
+                                    <span class="officer-avatar">
+                                        @officerInitials
+                                    </span>
+
+                                    <span>
+                                        @assignedOfficer
+                                    </span>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+
+                                <div class="detected-time-cell">
+
+                                    <strong>
+                                        @detection.DetectedAt.ToString("dd MMM yyyy")
+                                    </strong>
+
+                                    <small>
+                                        @detection.DetectedAt.ToString("hh:mm:ss tt")
+                                    </small>
+
+                                </div>
+
+                            </td>
+
+                            <td>
+                                <button type="button"
+                                        class="view-detection-button"
+                                        onclick="openDetectionModal(this)">
+                                    Investigate
+                                </button>
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+            <div id="emptyDetectionState"
+                 class="empty-detection-state">
+
+                <div class="empty-state-icon">
+                    ⌕
+                </div>
+
+                <h3>No detection records found</h3>
+
+                <p>
+                    Try changing or clearing the selected filters.
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</section>
+
+<div id="detectionDetailsModal"
+     class="detection-modal"
+     aria-hidden="true">
+
+    <div class="detection-modal-overlay"
+         onclick="closeDetectionModal()">
+    </div>
+
+    <div class="detection-modal-dialog">
+
+        <header class="detection-modal-header">
+
+            <div>
+                <span class="modal-eyebrow">
+                    AI DETECTION INVESTIGATION
+                </span>
+
+                <h2 id="modalDetectionTitle">
+                    Detection details
+                </h2>
+            </div>
+
+            <button type="button"
+                    class="modal-close-button"
+                    onclick="closeDetectionModal()">
+                ×
+            </button>
+
+        </header>
+
+        <div class="detection-modal-body">
+
+            <div class="modal-camera-preview">
+
+                <div class="preview-grid-overlay">
+                </div>
+
+                <div class="preview-live-label">
+                    <span></span>
+                    AI DETECTION
+                </div>
+
+                <div id="previewCameraLabel"
+                     class="preview-camera-label">
+                    CAMERA
+                </div>
+
+                <div class="preview-detection-box">
+
+                    <span id="previewObjectLabel">
+                        OBJECT 0%
+                    </span>
+
+                </div>
+
+                <div class="preview-placeholder">
+                    AI-ASSISTED SECURITY FRAME
+                </div>
+
+            </div>
+
+            <div class="modal-detail-grid">
+
+                <div class="modal-detail-item">
+                    <span>Detection ID</span>
+                    <strong id="modalDetectionId">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Tracking ID</span>
+                    <strong id="modalTrackingId">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Frame ID</span>
+                    <strong id="modalFrameId">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Camera</span>
+                    <strong id="modalCameraName">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Location</span>
+                    <strong id="modalLocation">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Zone</span>
+                    <strong id="modalZone">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Object</span>
+                    <strong id="modalObjectType">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Confidence</span>
+                    <strong id="modalConfidence">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Severity</span>
+                    <strong id="modalSeverity">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>AI model</span>
+                    <strong id="modalAiModel">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Processing time</span>
+                    <strong id="modalProcessingTime">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Bounding boxes</span>
+                    <strong id="modalBoxCount">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Detected</span>
+                    <strong id="modalDetectedAt">—</strong>
+                </div>
+
+                <div class="modal-detail-item">
+                    <span>Officer</span>
+                    <strong id="modalOfficer">—</strong>
+                </div>
+
+            </div>
+
+            <div class="modal-notes-panel">
+
+                <span>Investigation notes</span>
+
+                <p id="modalNotes">
+                    No investigation notes recorded.
+                </p>
+
+            </div>
+
+            <div class="modal-status-control">
+
+                <label for="modalStatusSelect">
+                    Update status
+                </label>
+
+                <select id="modalStatusSelect">
+
+                    <option value="Pending">
+                        Pending
+                    </option>
+
+                    <option value="Reviewed">
+                        Reviewed
+                    </option>
+
+                    <option value="Escalated">
+                        Escalated
+                    </option>
+
+                    <option value="Resolved">
+                        Resolved
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+        <footer class="detection-modal-footer">
+
+            <button type="button"
+                    class="secondary-action-button"
+                    onclick="closeDetectionModal()">
+                Close
+            </button>
+
+            <button type="button"
+                    class="primary-action-button"
+                    onclick="saveDetectionStatus()">
+                Save status
+            </button>
+
+        </footer>
+
+    </div>
+
+</div>
+
+<div id="detectionToast"
+     class="detection-toast">
+
+    <span class="toast-icon">
+        ✓
+    </span>
+
+    <span id="detectionToastMessage">
+        Detection records updated.
+    </span>
+
+</div>
+
+@section Scripts {
+
+    <script>
+        let selectedDetectionRow = null;
+
+        let filteredRows = [];
+
+        function getDetectionRows() {
+            return Array.from(
+                document.querySelectorAll(
+                    "#detectionLogsTable tbody .detection-log-row"
+                )
+            );
+        }
+
+        function applyDetectionFilters() {
+            const search =
+                document
+                    .getElementById("detectionSearch")
+                    .value
+                    .trim()
+                    .toLowerCase();
+
+            const camera =
+                document
+                    .getElementById("cameraFilter")
+                    .value;
+
+            const objectType =
+                document
+                    .getElementById("objectFilter")
+                    .value;
+
+            const severity =
+                document
+                    .getElementById("severityFilter")
+                    .value;
+
+            const status =
+                document
+                    .getElementById("statusFilter")
+                    .value;
+
+            const dateFilter =
+                document
+                    .getElementById("dateFilter")
+                    .value;
+
+            const now =
+                new Date();
+
+            filteredRows =
+                getDetectionRows().filter(
+                    function (row) {
+                        const searchableText =
+                            [
+                                row.dataset.id,
+                                row.dataset.trackingId,
+                                row.dataset.frameId,
+                                row.dataset.cameraName,
+                                row.dataset.cameraCode,
+                                row.dataset.location,
+                                row.dataset.zone,
+                                row.dataset.objectType,
+                                row.dataset.alertType,
+                                row.dataset.severityName,
+                                row.dataset.statusName,
+                                row.dataset.officer,
+                                row.dataset.aiModel
+                            ]
+                                .join(" ")
+                                .toLowerCase();
+
+                        const matchesSearch =
+                            !search ||
+                            searchableText.includes(
+                                search
+                            );
+
+                        const matchesCamera =
+                            !camera ||
+                            row.dataset.camera ===
+                                camera;
+
+                        const matchesObject =
+                            !objectType ||
+                            row.dataset.object ===
+                                objectType;
+
+                        const matchesSeverity =
+                            !severity ||
+                            row.dataset.severity ===
+                                severity;
+
+                        const matchesStatus =
+                            !status ||
+                            row.dataset.status ===
+                                status;
+
+                        let matchesDate = true;
+
+                        if (dateFilter) {
+                            const detectedDate =
+                                new Date(
+                                    row.dataset.date
+                                );
+
+                            const ageMilliseconds =
+                                now -
+                                detectedDate;
+
+                            const ageDays =
+                                ageMilliseconds /
+                                (
+                                    1000 *
+                                    60 *
+                                    60 *
+                                    24
+                                );
+
+                            if (dateFilter === "today") {
+                                matchesDate =
+                                    detectedDate
+                                        .toDateString() ===
+                                    now.toDateString();
+                            }
+
+                            if (dateFilter === "seven") {
+                                matchesDate =
+                                    ageDays <= 7;
+                            }
+
+                            if (dateFilter === "thirty") {
+                                matchesDate =
+                                    ageDays <= 30;
+                            }
+                        }
+
+                        return (
+                            matchesSearch &&
+                            matchesCamera &&
+                            matchesObject &&
+                            matchesSeverity &&
+                            matchesStatus &&
+                            matchesDate
+                        );
+                    }
+                );
+
+            const allRows =
+                getDetectionRows();
+
+            allRows.forEach(
+                function (row) {
+                    row.style.display =
+                        filteredRows.includes(row)
+                            ? ""
+                            : "none";
+                }
+            );
+
+            document.getElementById(
+                "visibleRecordCount"
+            ).textContent =
+                filteredRows.length;
+
+            document.getElementById(
+                "emptyDetectionState"
+            ).style.display =
+                filteredRows.length === 0
+                    ? "flex"
+                    : "none";
+        }
+
+        function clearDetectionFilters() {
+            document.getElementById(
+                "detectionSearch"
+            ).value = "";
+
+            document.getElementById(
+                "cameraFilter"
+            ).value = "";
+
+            document.getElementById(
+                "objectFilter"
+            ).value = "";
+
+            document.getElementById(
+                "severityFilter"
+            ).value = "";
+
+            document.getElementById(
+                "statusFilter"
+            ).value = "";
+
+            document.getElementById(
+                "dateFilter"
+            ).value = "";
+
+            applyDetectionFilters();
+        }
+
+        function openDetectionModal(button) {
+            selectedDetectionRow =
+                button.closest("tr");
+
+            if (!selectedDetectionRow) {
+                return;
+            }
+
+            const row =
+                selectedDetectionRow;
+
+            document.getElementById(
+                "modalDetectionTitle"
+            ).textContent =
+                row.dataset.alertType ||
+                "Detection details";
+
+            document.getElementById(
+                "modalDetectionId"
+            ).textContent =
+                "DET-" +
+                (
+                    row.dataset.id ||
+                    "—"
+                );
+
+            document.getElementById(
+                "modalTrackingId"
+            ).textContent =
+                row.dataset.trackingId ||
+                "—";
+
+            document.getElementById(
+                "modalFrameId"
+            ).textContent =
+                row.dataset.frameId ||
+                "—";
+
+            document.getElementById(
+                "modalCameraName"
+            ).textContent =
+                row.dataset.cameraName ||
+                "—";
+
+            document.getElementById(
+                "modalLocation"
+            ).textContent =
+                row.dataset.location ||
+                "—";
+
+            document.getElementById(
+                "modalZone"
+            ).textContent =
+                row.dataset.zone ||
+                "—";
+
+            document.getElementById(
+                "modalObjectType"
+            ).textContent =
+                row.dataset.objectType ||
+                "—";
+
+            document.getElementById(
+                "modalConfidence"
+            ).textContent =
+                (
+                    row.dataset.confidence ||
+                    "0"
+                ) +
+                "%";
+
+            document.getElementById(
+                "modalSeverity"
+            ).textContent =
+                row.dataset.severityName ||
+                "—";
+
+            document.getElementById(
+                "modalAiModel"
+            ).textContent =
+                row.dataset.aiModel ||
+                "—";
+
+            document.getElementById(
+                "modalProcessingTime"
+            ).textContent =
+                (
+                    row.dataset.processingTime ||
+                    "0"
+                ) +
+                " ms";
+
+            document.getElementById(
+                "modalBoxCount"
+            ).textContent =
+                row.dataset.boxCount ||
+                "0";
+
+            document.getElementById(
+                "modalDetectedAt"
+            ).textContent =
+                row.dataset.detectedAt ||
+                "—";
+
+            document.getElementById(
+                "modalOfficer"
+            ).textContent =
+                row.dataset.officer ||
+                "Unassigned";
+
+            document.getElementById(
+                "modalNotes"
+            ).textContent =
+                row.dataset.notes ||
+                "No investigation notes recorded.";
+
+            document.getElementById(
+                "modalStatusSelect"
+            ).value =
+                row.dataset.statusName ||
+                "Pending";
+
+            document.getElementById(
+                "previewObjectLabel"
+            ).textContent =
+                (
+                    row.dataset.objectType ||
+                    "OBJECT"
+                ).toUpperCase() +
+                " " +
+                (
+                    row.dataset.confidence ||
+                    "0"
+                ) +
+                "%";
+
+            document.getElementById(
+                "previewCameraLabel"
+            ).textContent =
+                row.dataset.cameraCode ||
+                "CAMERA";
+
+            const modal =
+                document.getElementById(
+                    "detectionDetailsModal"
+                );
+
+            modal.classList.add("open");
+
+            modal.setAttribute(
+                "aria-hidden",
+                "false"
+            );
+
+            document.body.classList.add(
+                "modal-open"
+            );
+        }
+
+        function closeDetectionModal() {
+            const modal =
+                document.getElementById(
+                    "detectionDetailsModal"
+                );
+
+            modal.classList.remove("open");
+
+            modal.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+
+            document.body.classList.remove(
+                "modal-open"
+            );
+
+            selectedDetectionRow = null;
+        }
+
+        function saveDetectionStatus() {
+            if (!selectedDetectionRow) {
+                return;
+            }
+
+            const selectedStatus =
+                document.getElementById(
+                    "modalStatusSelect"
+                ).value;
+
+            selectedDetectionRow.dataset.status =
+                selectedStatus.toLowerCase();
+
+            selectedDetectionRow.dataset.statusName =
+                selectedStatus;
+
+            const statusBadge =
+                selectedDetectionRow.querySelector(
+                    ".status-badge"
+                );
+
+            if (statusBadge) {
+                statusBadge.innerHTML =
+                    '<span class="badge-dot"></span>' +
+                    selectedStatus;
+
+                statusBadge.className =
+                    "status-badge status-" +
+                    selectedStatus.toLowerCase();
+            }
+
+            closeDetectionModal();
+
+            applyDetectionFilters();
+
+            showDetectionToast(
+                "Detection status updated to " +
+                selectedStatus +
+                "."
+            );
+        }
+
+        function refreshDetectionLogs() {
+            document.getElementById(
+                "lastSyncTime"
+            ).textContent =
+                new Date()
+                    .toLocaleTimeString();
+
+            showDetectionToast(
+                "Detection records refreshed successfully."
+            );
+        }
+
+        function exportDetectionLogs() {
+            const csvRows = [
+                [
+                    "Detection ID",
+                    "Camera",
+                    "Location",
+                    "Object",
+                    "Confidence",
+                    "Severity",
+                    "Status",
+                    "AI Model",
+                    "Officer",
+                    "Detected At"
+                ]
+            ];
+
+            filteredRows.forEach(
+                function (row) {
+                    csvRows.push(
+                        [
+                            "DET-" +
+                                row.dataset.id,
+                            row.dataset.cameraName,
+                            row.dataset.location,
+                            row.dataset.objectType,
+                            row.dataset.confidence +
+                                "%",
+                            row.dataset.severityName,
+                            row.dataset.statusName,
+                            row.dataset.aiModel,
+                            row.dataset.officer,
+                            row.dataset.detectedAt
+                        ]
+                    );
+                }
+            );
+
+            const csvContent =
+                csvRows
+                    .map(function (row) {
+                        return row
+                            .map(function (value) {
+                                return (
+                                    '"' +
+                                    String(
+                                        value || ""
+                                    )
+                                        .replaceAll(
+                                            '"',
+                                            '""'
+                                        ) +
+                                    '"'
+                                );
+                            })
+                            .join(",");
+                    })
+                    .join("\n");
+
+            const blob =
+                new Blob(
+                    [csvContent],
+                    {
+                        type:
+                            "text/csv;charset=utf-8;"
+                    }
+                );
+
+            const url =
+                URL.createObjectURL(blob);
+
+            const link =
+                document.createElement("a");
+
+            link.href = url;
+
+            link.download =
+                "NovaIntegration-Detection-Logs.csv";
+
+            document.body.appendChild(link);
+
+            link.click();
+
+            document.body.removeChild(link);
+
+            URL.revokeObjectURL(url);
+
+            showDetectionToast(
+                "Detection records exported successfully."
+            );
+        }
+
+        function showDetectionToast(message) {
+            const toast =
+                document.getElementById(
+                    "detectionToast"
+                );
+
+            const toastMessage =
+                document.getElementById(
+                    "detectionToastMessage"
+                );
+
+            toastMessage.textContent =
+                message;
+
+            toast.classList.add("show");
+
+            window.setTimeout(
+                function () {
+                    toast.classList.remove(
+                        "show"
+                    );
+                },
+                2600
+            );
+        }
+
+        document.addEventListener(
+            "keydown",
+            function (event) {
+                if (event.key === "Escape") {
+                    closeDetectionModal();
+                }
+            }
+        );
+
+        filteredRows =
+            getDetectionRows();
+
+        applyDetectionFilters();
+    </script>
+
+}
