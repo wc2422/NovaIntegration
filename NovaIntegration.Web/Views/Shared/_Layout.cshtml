@@ -1,0 +1,212 @@
+﻿@{
+    string currentController =
+        ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+
+    string dashboardClass =
+        currentController == "Dashboard" ||
+        currentController == "Home"
+            ? "active"
+            : "";
+
+    string camerasClass =
+        currentController == "Cameras"
+            ? "active"
+            : "";
+
+    string alertsClass =
+        currentController == "Alerts"
+            ? "active"
+            : "";
+
+    string detectionLogsClass =
+        currentController == "DetectionLogs"
+            ? "active"
+            : "";
+}
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8" />
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
+
+    <title>
+        @ViewData["Title"] - NovaIntegration
+    </title>
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <link rel="stylesheet"
+          href="~/css/site.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/css/simple-theme.css"
+          asp-append-version="true" />
+
+</head>
+
+<body>
+
+    <aside class="sidebar">
+
+        <div class="sidebar-brand">
+
+            <div>
+
+                <h2>
+                    NovaIntegration
+                </h2>
+
+                <p>
+                    AI Security System
+                </p>
+
+            </div>
+
+        </div>
+
+        <nav class="sidebar-navigation">
+
+            <a class="@dashboardClass"
+               asp-controller="Dashboard"
+               asp-action="Index">
+
+                <span class="sidebar-icon">
+                    ▦
+                </span>
+
+                <span>
+                    Dashboard
+                </span>
+
+            </a>
+
+            <a class="@camerasClass"
+               asp-controller="Cameras"
+               asp-action="Index">
+
+                <span class="sidebar-icon">
+                    ◉
+                </span>
+
+                <span>
+                    Cameras
+                </span>
+
+            </a>
+
+            <a class="@alertsClass"
+               asp-controller="Alerts"
+               asp-action="Index">
+
+                <span class="sidebar-icon">
+                    !
+                </span>
+
+                <span>
+                    Alerts
+                </span>
+
+            </a>
+
+            <a class="@detectionLogsClass"
+               asp-controller="DetectionLogs"
+               asp-action="Index">
+
+                <span class="sidebar-icon">
+                    ≡
+                </span>
+
+                <span>
+                    Detection Logs
+                </span>
+
+            </a>
+
+        </nav>
+
+        <div class="sidebar-status">
+
+            <span class="status-dot"></span>
+
+            <div>
+
+                <strong>
+                    System Online
+                </strong>
+
+                <small>
+                    AI monitoring active
+                </small>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+    <div class="main-content">
+
+        <header class="topbar">
+
+            <div>
+
+                <h3>
+                    @ViewData["Title"]
+                </h3>
+
+                <p>
+                    AI-Assisted Security Dashboard
+                </p>
+
+            </div>
+
+            <div class="topbar-right">
+
+                <div class="live-monitoring">
+
+                    <span class="status-dot"></span>
+
+                    <span>
+                        Live Monitoring
+                    </span>
+
+                </div>
+
+            </div>
+
+        </header>
+
+        <main class="page-content">
+
+            @RenderBody()
+
+        </main>
+
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js">
+    </script>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js">
+    </script>
+
+    <script src="~/js/site.js"
+            asp-append-version="true">
+    </script>
+
+    @await RenderSectionAsync(
+    "Scripts",
+        required: false
+        )
+
+</body>
+
+</html>
