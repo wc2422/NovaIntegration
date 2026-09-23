@@ -1,51 +1,40 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
-#include <opencv2/opencv.hpp>
+#include <opencv4/opencv2/opencv.hpp>
 #include <ctime>
 
 using namespace cv;
-using namespace std;
 
 int main() {
-	time_t currentTime;
-	time(&currentTime);
-	std::cout << "Start" << std::endl;
-	std::cout << ctime(&currentTime);
+	//URL goes here
+	const std::string RTSP_URL = "rtsp://localhost:22022/";
 
+	Mat frame;
+	VideoCapture capture(RTSP_URL, CAP_FFMPEG);
 
-	VideoCapture capture("rtsp://192.168.2.90:554", cv::CAP_FFMPEG);	//REPLACE URL WITH YOUR OWN
-
-	if(!capture.isOpened()) {
-		cout << "Error: Cannot open the RTSP stream" << endl;
+	if (!capture.isOpened()) {
+		std::cout << "Error: Cannot open the RTSP stream" << std::endl;
 		return -1;
 	}
-	
-	Mat frame;
-	
-	cv::VideoWriter output("C:\\data2\\output.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
-			30.0, cv::Size(1920, 1080));	//This has to match the input video resolution
 
-	while(true) {
-		bool isFrameGrabbed = capture.grab();
-		if(!isFrameGrabbed) {
-			cout << "Error: Cannot grab frame" << endl;
-			break;
-		}
+	//cv::VideoWriter output("C:\\data2\\output.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
+	//		30.0, cv::Size(1920, 1080));	//This has to match the input video resolution
 
-		capture.retrieve(frame);
-		output.write(frame);
-		
-		//Display
+	while (true) {
+		capture >> frame;
 		imshow("Stream", frame);
-		if(waitKey(30) == 'q') {
+		//output.write(frame);
+
+		//esc key to exit
+		if (waitKey(1) == 'q') {
 			break;
 		}
 	}
 
 	capture.release();
-	output.release();
+	//output.release();
 	destroyAllWindows();
-		
+
 	return 0;
-	
+
 }
