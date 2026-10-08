@@ -361,3 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# python virtual environment
+.venv/
+
+# C++ vcpkg dependencies
+vcpkg_installed/
