@@ -367,3 +367,6 @@ FodyWeavers.xsd
 
 # C++ vcpkg dependencies
 vcpkg_installed/
+
+# Local facial storage documentation
+/docs/face-storage.md

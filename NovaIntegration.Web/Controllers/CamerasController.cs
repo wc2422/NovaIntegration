@@ -111,14 +111,36 @@ namespace NovaIntegration.Web.Controllers
         }
 
         [HttpPost]
-        public IActionResult EnrollFace([FromBody] FaceEnrollmentRequest? request)
+        public async Task<IActionResult> ReloadFaceStorage(CancellationToken cancellationToken)
+        {
+            bool loaded = await _faceRecognitionDemo.LoadEnrollmentsAsync(cancellationToken);
+            return StatusCode(loaded ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable,
+                _faceRecognitionDemo.GetStatus());
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> EnrollFace(
+            [FromBody] FaceEnrollmentRequest? request,
+            CancellationToken cancellationToken)
         {
             string name = request?.Name?.Trim() ?? string.Empty;
-            if (!_faceRecognitionDemo.EnrollPendingFace(name))
+            FaceEnrollmentResult result = await _faceRecognitionDemo.EnrollPendingFaceAsync(
+                name, request?.PendingToken, cancellationToken);
+            if (result == FaceEnrollmentResult.StorageUnavailable)
             {
-                return BadRequest(new
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
                 {
-                    message = "Enter a name between 1 and 50 characters while an unknown face is visible."
+                    message = "Face storage is unavailable. The face was not confirmed as saved."
+                });
+            }
+            if (result != FaceEnrollmentResult.Enrolled)
+            {
+                bool staleFace = result == FaceEnrollmentResult.NoPendingFace;
+                return StatusCode(staleFace ? StatusCodes.Status409Conflict : StatusCodes.Status400BadRequest, new
+                {
+                    message = staleFace
+                        ? "This face is no longer pending. Wait for the next unknown face."
+                        : "Enter a name between 1 and 50 characters."
                 });
             }
 
@@ -135,6 +157,7 @@ namespace NovaIntegration.Web.Controllers
         public sealed class FaceEnrollmentRequest
         {
             public string Name { get; set; } = string.Empty;
+            public string? PendingToken { get; set; }
         }
     }
 }

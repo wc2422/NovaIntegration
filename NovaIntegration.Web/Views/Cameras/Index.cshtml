@@ -1161,6 +1161,27 @@
         backdrop-filter: blur(5px);
     }
 
+    #faceStorageError {
+        margin: 8px 0;
+        color: #fbbf24;
+        font-size: 12px;
+    }
+
+    #faceEnrollmentError {
+        margin: 10px 0 0;
+        color: #fbbf24;
+    }
+
+    #faceEnrollmentError:empty,
+    #faceStorageError:empty {
+        display: none;
+    }
+
+    .face-enrollment-actions button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+    }
+
         .face-enrollment-overlay.show {
             display: flex;
         }
@@ -2044,6 +2065,14 @@
 
             </div>
 
+            <div class="camera-modal-detail" role="status" aria-live="polite">
+                <span>Facial recognition storage</span>
+                <strong id="faceStorageStatus">Checking storage...</strong>
+                <p id="faceStorageError"></p>
+                <button id="retryFaceStorageButton" type="button" class="camera-details-button"
+                        onclick="retryFaceStorage()" hidden>Retry storage</button>
+            </div>
+
         </div>
 
     </div>
@@ -2056,13 +2085,15 @@
     <form class="face-enrollment-dialog" onsubmit="saveFaceEnrollment(event)">
         <span>Facial recognition demo</span>
         <h3>Unknown face detected</h3>
-        <p>Enter a name to remember this person in memory until the application stops.</p>
+        <p id="faceEnrollmentDescription">Enter a name to save this person for facial recognition.</p>
         <input id="faceEnrollmentName"
                type="text"
                maxlength="50"
+               required
                autocomplete="off"
                placeholder="Enter a name"
                aria-label="Name for detected face" />
+        <p id="faceEnrollmentError" role="alert"></p>
         <div class="face-enrollment-actions">
             <button type="button" onclick="dismissFaceEnrollment()">Not now</button>
             <button type="submit" class="primary">Save name</button>
@@ -2360,11 +2391,36 @@
             let faceEnrollmentPromptOpen = false;
             let faceStatusCheckInFlight = false;
             let lastFaceEnrollmentToken = null;
+            let faceEnrollmentRequestInFlight = false;
+
+            function updateFaceStorageStatus(status) {
+            document.getElementById("faceStorageStatus").textContent =
+            (status.storageProvider === "Memory" ? "Temporary memory" : "Database") +
+            (status.storageReady ? " · " + status.knownFaceCount + " saved faces" : " · unavailable");
+            document.getElementById("faceStorageError").textContent = status.storageError || status.error || "";
+            document.getElementById("retryFaceStorageButton").hidden = status.storageReady && !status.storageError;
+            document.getElementById("faceEnrollmentDescription").textContent = status.storageProvider === "Memory"
+            ? "Enter a name to remember this person until the application stops."
+            : "Enter a name to save this person in the database for recognition after restarts.";
+            }
+
+            async function retryFaceStorage() {
+            const button = document.getElementById("retryFaceStorageButton");
+            button.disabled = true;
+            try {
+            const response = await fetch("/Cameras/ReloadFaceStorage", { method: "POST" });
+            updateFaceStorageStatus(await response.json());
+            } catch (error) {
+            document.getElementById("faceStorageError").textContent = "Storage retry failed. Try again.";
+            } finally {
+            button.disabled = false;
+            }
+            }
 
             async function checkFaceEnrollment() {
             const overlay = document.getElementById("cameraModalOverlay");
             if (!overlay || !overlay.classList.contains("show") ||
-            faceEnrollmentPromptOpen || faceStatusCheckInFlight) {
+            faceStatusCheckInFlight) {
             return;
             }
 
@@ -2376,7 +2432,9 @@
             }
 
             const status = await response.json();
-            if (!status.enabled || !status.pendingEnrollment ||
+            updateFaceStorageStatus(status);
+            if (faceEnrollmentPromptOpen) return;
+            if (!status.enabled || !status.storageReady || !status.pendingEnrollment ||
             !status.pendingToken || status.pendingToken === lastFaceEnrollmentToken) {
             return;
             }
@@ -2400,6 +2458,7 @@
             }
 
             nameInput.value = "";
+            document.getElementById("faceEnrollmentError").textContent = "";
             enrollmentOverlay.classList.add("show");
             enrollmentOverlay.setAttribute("aria-hidden", "false");
             nameInput.focus();
@@ -2416,6 +2475,7 @@
 
             async function saveFaceEnrollment(event) {
             event.preventDefault();
+            if (faceEnrollmentRequestInFlight) return;
             const nameInput = document.getElementById("faceEnrollmentName");
             const name = nameInput ? nameInput.value.trim() : "";
             if (!name) {
@@ -2423,31 +2483,52 @@
             return;
             }
 
+            setFaceEnrollmentBusy(true);
+            document.getElementById("faceEnrollmentError").textContent = "";
             try {
             const enrollmentResponse = await fetch("/Cameras/EnrollFace", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: name })
+            body: JSON.stringify({ name: name, pendingToken: lastFaceEnrollmentToken })
             });
 
             if (enrollmentResponse.ok) {
             closeFaceEnrollmentDialog();
-            showCameraToast(name + " saved in facial recognition memory.");
+            showCameraToast(name + " saved for facial recognition.");
             } else {
-            showCameraToast("The face could not be saved. Keep it visible and try again.");
+            const error = await enrollmentResponse.json();
+            const message = error.message || "The face could not be saved. Try again.";
+            if (enrollmentResponse.status === 409) {
+            closeFaceEnrollmentDialog();
+            showCameraToast(message);
+            } else {
+            document.getElementById("faceEnrollmentError").textContent = message;
+            }
             }
             } catch (error) {
             console.warn("Facial enrollment failed.", error);
-            showCameraToast("The face could not be saved. Try again.");
+            document.getElementById("faceEnrollmentError").textContent = "The save could not be confirmed. Try again.";
+            } finally {
+            setFaceEnrollmentBusy(false);
             }
             }
 
+            function setFaceEnrollmentBusy(busy) {
+            faceEnrollmentRequestInFlight = busy;
+            document.querySelectorAll(".face-enrollment-dialog input, .face-enrollment-dialog button")
+            .forEach(element => element.disabled = busy);
+            document.querySelector(".face-enrollment-dialog button[type='submit']").textContent = busy ? "Saving..." : "Save name";
+            }
+
             async function dismissFaceEnrollment() {
+            if (faceEnrollmentRequestInFlight) return;
+            setFaceEnrollmentBusy(true);
             try {
             await fetch("/Cameras/DismissFaceEnrollment", { method: "POST" });
             } catch (error) {
             console.warn("Facial enrollment dismissal failed.", error);
             } finally {
+            setFaceEnrollmentBusy(false);
             closeFaceEnrollmentDialog();
             }
             }
