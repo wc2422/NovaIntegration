@@ -1,0 +1,25 @@
+@model NovaIntegration.Web.Models.SignupViewModel
+
+@{
+    ViewData["Title"] = "Sign up";
+}
+
+<h1>Create an account</h1>
+
+<form asp-controller="Account" asp-action="Signup" method="post">
+    <div asp-validation-summary="All"></div>
+
+    <label asp-for="Username"></label>
+    <input asp-for="Username" autocomplete="username" />
+    <span asp-validation-for="Username"></span>
+
+    <label asp-for="Password"></label>
+    <input asp-for="Password" autocomplete="new-password" />
+    <span asp-validation-for="Password"></span>
+
+    <label asp-for="ConfirmPassword"></label>
+    <input asp-for="ConfirmPassword" autocomplete="new-password" />
+    <span asp-validation-for="ConfirmPassword"></span>
+
+    <button type="submit">Create account</button>
+</form>
