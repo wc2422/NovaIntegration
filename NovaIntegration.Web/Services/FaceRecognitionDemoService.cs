@@ -1,11 +1,12 @@
 using OpenCvSharp;
 using OpenCvSharp.Dnn;
+using NovaIntegration.Web.Models;
+using NovaIntegration.Web.Services.FaceStorage;
 
 namespace NovaIntegration.Web.Services;
 
 /// <summary>
-/// Lightweight proof-of-concept face recognition. All enrolled faces live only
-/// in this singleton's memory and are discarded when the web app stops.
+/// Lightweight face recognition with a local cache backed by the selected enrollment repository.
 /// </summary>
 public sealed class FaceRecognitionDemoService : IDisposable
 {
@@ -26,8 +27,12 @@ public sealed class FaceRecognitionDemoService : IDisposable
 
     private readonly object _sync = new();
     private readonly ILogger<FaceRecognitionDemoService> _logger;
+    private readonly IFaceEnrollmentRepository _enrollments;
+    private readonly SemaphoreSlim _enrollmentGate = new(1, 1);
     private readonly string _detectorModelPath;
-    private readonly List<KnownFace> _knownFaces = [];
+    private readonly List<FaceEnrollment> _knownFaces = [];
+    private bool _storageReady;
+    private string? _storageError;
 
     private FaceDetectorYN? _detector;
     private Net? _recognizer;
@@ -42,9 +47,11 @@ public sealed class FaceRecognitionDemoService : IDisposable
 
     public FaceRecognitionDemoService(
         IWebHostEnvironment environment,
-        ILogger<FaceRecognitionDemoService> logger)
+        ILogger<FaceRecognitionDemoService> logger,
+        IFaceEnrollmentRepository enrollments)
     {
         _logger = logger;
+        _enrollments = enrollments;
         _detectorModelPath = Path.Combine(
             environment.ContentRootPath,
             "FaceModels",
@@ -65,7 +72,7 @@ public sealed class FaceRecognitionDemoService : IDisposable
 
             _recognizer = CvDnn.ReadNetFromOnnx(recognizerModelPath);
             _logger.LogInformation(
-                "In-memory facial recognition demo initialized with YuNet and SFace.");
+                "Facial recognition initialized with YuNet and SFace.");
         }
         catch (Exception exception)
         {
@@ -73,6 +80,52 @@ public sealed class FaceRecognitionDemoService : IDisposable
             _logger.LogWarning(
                 exception,
                 "Facial recognition is unavailable; camera frames will remain unchanged.");
+        }
+    }
+
+    /// <summary>Loads the recognition cache at startup or after an explicit storage retry.</summary>
+    public async Task<bool> LoadEnrollmentsAsync(CancellationToken cancellationToken)
+    {
+        // Reloads and saves share a gate so a reload cannot replace a newly saved face.
+        await _enrollmentGate.WaitAsync(cancellationToken);
+        try
+        {
+            IReadOnlyList<FaceEnrollment> faces = await _enrollments.LoadAsync(cancellationToken);
+            foreach (FaceEnrollment face in faces)
+            {
+                face.Validate();
+            }
+
+            lock (_sync)
+            {
+                _knownFaces.Clear();
+                _knownFaces.AddRange(faces.Select(face =>
+                    face with { Embedding = (float[])face.Embedding.Clone() }));
+                _storageReady = true;
+                _storageError = null;
+            }
+            _logger.LogInformation("Loaded {Count} face enrollments using {Provider} storage.",
+                faces.Count, _enrollments.Provider);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            lock (_sync)
+            {
+                _storageReady = false;
+                _storageError = "Face storage could not be loaded. Check the connection and required table, then retry storage.";
+            }
+            _logger.LogWarning(exception,
+                "Face storage could not be loaded; new enrollments are disabled.");
+            return false;
+        }
+        finally
+        {
+            _enrollmentGate.Release();
         }
     }
 
@@ -139,7 +192,7 @@ public sealed class FaceRecognitionDemoService : IDisposable
                         faces,
                         row,
                         coordinateScale);
-                    KnownFace? knownFace = FindBestMatch(embedding, out float similarity);
+                    FaceEnrollment? knownFace = FindBestMatch(embedding, out float similarity);
                     bool isKnown = knownFace is not null && similarity >= RecognitionThreshold;
 
                     if (!isKnown)
@@ -189,32 +242,79 @@ public sealed class FaceRecognitionDemoService : IDisposable
                 _pendingEmbedding is not null,
                 _pendingToken,
                 _knownFaces.Count,
-                _lastError);
+                _lastError,
+                _enrollments.Provider,
+                _storageReady,
+                _storageError);
         }
     }
 
-    public bool EnrollPendingFace(string? name)
+    public async Task<FaceEnrollmentResult> EnrollPendingFaceAsync(
+        string? name,
+        string? pendingToken,
+        CancellationToken cancellationToken)
     {
         string normalizedName = (name ?? string.Empty).Trim();
         if (normalizedName.Length is < 1 or > 50)
         {
-            return false;
+            return FaceEnrollmentResult.InvalidName;
         }
 
-        lock (_sync)
+        await _enrollmentGate.WaitAsync(cancellationToken);
+        try
         {
-            if (_pendingEmbedding is null)
+            FaceEnrollment enrollment;
+            lock (_sync)
             {
-                return false;
+                if (!_storageReady)
+                {
+                    return FaceEnrollmentResult.StorageUnavailable;
+                }
+                if (_disposed || _pendingEmbedding is null || _pendingToken != pendingToken)
+                {
+                    return FaceEnrollmentResult.NoPendingFace;
+                }
+                enrollment = FaceEnrollment.Create(_pendingToken!, normalizedName, _pendingEmbedding);
             }
 
-            _knownFaces.Add(new KnownFace(normalizedName, (float[])_pendingEmbedding.Clone()));
-            ClearPendingEnrollment();
-            _enrollmentCooldownUntilUtc = DateTime.UtcNow.AddSeconds(10);
-            _logger.LogInformation(
-                "Enrolled {Name} in the in-memory facial recognition demo.",
-                normalizedName);
-            return true;
+            // Do not hold the frame-processing lock while waiting for Oracle.
+            try
+            {
+                await _enrollments.SaveAsync(enrollment, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                lock (_sync)
+                {
+                    _storageError = "The face could not be saved to storage. Please try again.";
+                }
+                _logger.LogWarning(exception, "Could not save a face enrollment.");
+                return FaceEnrollmentResult.StorageUnavailable;
+            }
+
+            lock (_sync)
+            {
+                // A reload may already have found a write whose response was lost.
+                _knownFaces.RemoveAll(face => face.FaceId == enrollment.FaceId);
+                _knownFaces.Add(enrollment);
+                _storageError = null;
+                // A dismissal/new candidate during the save must not clear that newer candidate.
+                if (_pendingToken == enrollment.FaceId)
+                {
+                    ClearPendingEnrollment();
+                }
+                _enrollmentCooldownUntilUtc = DateTime.UtcNow.AddSeconds(10);
+            }
+            _logger.LogInformation("Saved a face enrollment using {Provider} storage.", _enrollments.Provider);
+            return FaceEnrollmentResult.Enrolled;
+        }
+        finally
+        {
+            _enrollmentGate.Release();
         }
     }
 
@@ -282,6 +382,10 @@ public sealed class FaceRecognitionDemoService : IDisposable
         _recognizer!.SetInput(blob, string.Empty);
         using Mat feature = _recognizer.Forward(string.Empty);
         feature.GetArray(out float[] values);
+        if (values.Length != FaceEnrollment.EmbeddingDimensions)
+        {
+            throw new InvalidOperationException("SFace returned an unexpected embedding size.");
+        }
         Normalize(values);
         return values;
     }
@@ -329,12 +433,12 @@ public sealed class FaceRecognitionDemoService : IDisposable
         return transform;
     }
 
-    private KnownFace? FindBestMatch(float[] embedding, out float bestSimilarity)
+    private FaceEnrollment? FindBestMatch(float[] embedding, out float bestSimilarity)
     {
-        KnownFace? bestMatch = null;
+        FaceEnrollment? bestMatch = null;
         bestSimilarity = float.MinValue;
 
-        foreach (KnownFace knownFace in _knownFaces)
+        foreach (FaceEnrollment knownFace in _knownFaces)
         {
             float similarity = CosineSimilarity(embedding, knownFace.Embedding);
             if (similarity > bestSimilarity)
@@ -349,7 +453,7 @@ public sealed class FaceRecognitionDemoService : IDisposable
 
     private void TrackEnrollmentCandidate(IReadOnlyList<float[]> unknownEmbeddings)
     {
-        if (_pendingEmbedding is not null ||
+        if (!_storageReady || _pendingEmbedding is not null ||
             DateTime.UtcNow < _enrollmentCooldownUntilUtc ||
             unknownEmbeddings.Count != 1)
         {
@@ -466,7 +570,11 @@ public sealed class FaceRecognitionDemoService : IDisposable
 
     private static float CosineSimilarity(float[] first, float[] second)
     {
-        int length = Math.Min(first.Length, second.Length);
+        if (first.Length != second.Length)
+        {
+            throw new ArgumentException("Cannot compare face embeddings with different dimensions.");
+        }
+        int length = first.Length;
         float dotProduct = 0;
         for (int index = 0; index < length; index++)
         {
@@ -511,7 +619,6 @@ public sealed class FaceRecognitionDemoService : IDisposable
         }
     }
 
-    private sealed record KnownFace(string Name, float[] Embedding);
 }
 
 public sealed record FaceRecognitionDemoStatus(
@@ -519,4 +626,15 @@ public sealed record FaceRecognitionDemoStatus(
     bool PendingEnrollment,
     string? PendingToken,
     int KnownFaceCount,
-    string? Error);
+    string? Error,
+    string StorageProvider,
+    bool StorageReady,
+    string? StorageError);
+
+public enum FaceEnrollmentResult
+{
+    Enrolled,
+    InvalidName,
+    NoPendingFace,
+    StorageUnavailable
+}
