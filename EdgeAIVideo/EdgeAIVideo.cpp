@@ -1,8 +1,10 @@
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <filesystem>
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <string>
 #include <chrono>
+#include <winsock2.h> 
 #include <windows.h>
 #include <sqlext.h>
 #include <cpr/cpr.h>
@@ -12,6 +14,9 @@
 #include <mutex>
 #include <queue>
 #include <condition_variable>
+#include <limits> 
+
+#pragma comment(lib, "ws2_32.lib") 
 
 using json = nlohmann::json;
 using namespace cv;
@@ -20,18 +25,12 @@ namespace fs = std::filesystem;
 
 mutex frameMutex;
 vector<json> latestDetections;
-
 queue<Mat> frameQueue;
 mutex queueMutex;
 condition_variable queueCondVar;
+
 const int MAX_QUEUE_SIZE = 5;
-
-
-
-
 const string STORAGE_DIR = "D:\\Capstone\\SharedBuffer\\";
-
-
 
 void LogAlertsToOracle(const json& detections) {
     if (detections.empty()) return;
@@ -57,7 +56,7 @@ void LogAlertsToOracle(const json& detections) {
         for (const auto& item : detections) {
             string objectClass = item["class_name"];
             float confidenceScore = item["confidence"];
-            confidenceScore *= 100.0f; 
+            confidenceScore *= 100.0f;
 
             string query = "BEGIN "
                 "INSERT INTO system.EVENTS (Camera_ID, Alert_Type, Object_Class, Confidence_Score) "
@@ -106,7 +105,6 @@ void SendFrameToAI(const string& imageFilePath) {
                 }
             }
 
-            
             LogAlertsToOracle(responseJson);
         }
         catch (const exception& e) {
@@ -123,7 +121,6 @@ void CleanupStorage() {
     vector<fs::path> frames;
 
     try {
-       
         if (!fs::exists(STORAGE_DIR)) {
             return;
         }
@@ -152,7 +149,6 @@ void CleanupStorage() {
 }
 
 void ConsumerThread() {
-  
     try {
         if (!fs::exists(STORAGE_DIR)) {
             fs::create_directories(STORAGE_DIR);
@@ -161,7 +157,7 @@ void ConsumerThread() {
     }
     catch (const exception& e) {
         std::cerr << "[CRITICAL STORAGE ERROR] USB Drive not found: " << STORAGE_DIR << ". Error: " << e.what() << std::endl;
-        return; 
+        return;
     }
 
     while (true) {
@@ -177,7 +173,6 @@ void ConsumerThread() {
         auto now = chrono::system_clock::now();
         auto timestamp = chrono::duration_cast<chrono::milliseconds>(now.time_since_epoch()).count();
 
-       
         string filename = STORAGE_DIR + "frame_" + to_string(timestamp) + ".jpg";
         string latestFilename = STORAGE_DIR + "latest.jpg";
 
@@ -190,47 +185,120 @@ void ConsumerThread() {
 }
 
 int main() {
+    HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD prev_mode;
+    GetConsoleMode(hInput, &prev_mode);
+    SetConsoleMode(hInput, ENABLE_EXTENDED_FLAGS | (prev_mode & ~ENABLE_QUICK_EDIT_MODE));
+
     std::cout << "Booting up the local AI server in the background..." << std::endl;
     system("start /MIN powershell -Command \"cd C:\\Users\\Valmi\\OneDrive\\Documents\\Dll\\EdgeAIVideo; $venv = Join-Path $env:LOCALAPPDATA 'NovaIntegration\\ai-venv'; $python = Join-Path $venv 'Scripts\\python.exe'; & $python -m uvicorn AIendpoint:app --app-dir .\\AI --host 127.0.0.1 --port 8000\"");
 
     Sleep(3000);
 
+    string streamUrl;
+    std::cout << "Camera Setup: Press Enter for physical camera, or '0' for webcam:\n";
+    getline(cin, streamUrl);
+
+    if (streamUrl.empty()) {
+        streamUrl = "rtsp://66.129.154.87:22022";
+        std::cout << "[Config] Using physical camera stream: " << streamUrl << std::endl;
+    }
+    else if (streamUrl == "0") {
+        std::cout << "[Config] Using local webcam (ID: 0)" << std::endl;
+    }
+
     thread consumer(ConsumerThread);
     consumer.detach();
 
     while (true) {
-        // --- NETWORK STREAM (ALEX) ---
-        // string rtspUrl = "rtsp://173.206.214.57:22022";
-        // _putenv_s("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp"); 
-        // VideoCapture cap(rtspUrl, CAP_FFMPEG);
+        VideoCapture cap;
+        bool openSuccess = false;
 
-        VideoCapture cap(0, CAP_DSHOW);
+        if (streamUrl == "0") {
+            openSuccess = cap.open(0, CAP_DSHOW);
+        }
+        else {
+            std::cout << "[System] Pinging physical camera (5 second window)..." << std::endl;
 
-        if (!cap.isOpened()) {
-            std::cout << "[Warning] Could not open the video stream. Retrying in 5 seconds..." << std::endl;
-            Sleep(5000);
-            continue;
+            auto futureCheck = std::async(std::launch::async, []() {
+                WSADATA wsaData;
+                WSAStartup(MAKEWORD(2, 2), &wsaData);
+                SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+                u_long iMode = 1;
+                ioctlsocket(sock, FIONBIO, &iMode);
+
+                sockaddr_in serverAddr;
+                serverAddr.sin_family = AF_INET;
+                serverAddr.sin_port = htons(22022);
+                serverAddr.sin_addr.s_addr = inet_addr("66.129.154.87");
+
+                connect(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
+
+                fd_set set;
+                FD_ZERO(&set);
+                FD_SET(sock, &set);
+                timeval timeout;
+                timeout.tv_sec = 5;
+                timeout.tv_usec = 0;
+
+                int rv = select(0, NULL, &set, NULL, &timeout);
+                closesocket(sock);
+                WSACleanup();
+                return rv > 0;
+                });
+
+            if (futureCheck.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+                std::cout << "[Timeout] Physical camera did not respond within 5 seconds." << std::endl;
+                openSuccess = false;
+            }
+            else {
+                bool reachable = futureCheck.get();
+                if (reachable) {
+                    _putenv_s("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp");
+                    openSuccess = cap.open(streamUrl, CAP_FFMPEG);
+                }
+                else {
+                    openSuccess = false;
+                }
+            }
+        }
+
+        if (!openSuccess) {
+            if (streamUrl != "0") {
+                std::cout << "[Fallback] Auto-switching to local webcam immediately..." << std::endl;
+                streamUrl = "0";
+                continue;
+            }
+            else {
+                std::cout << "\n[Critical] Local webcam failed to open. Retrying in 5 seconds..." << std::endl;
+                Sleep(5000);
+                continue;
+            }
         }
 
         namedWindow("Edge AI Capstone", WINDOW_NORMAL);
-        std::cout << "[Connected] Video stream successfully opened. Extracting frames... Press 'q' to quit" << std::endl;
+        std::cout << "[Connected] Video stream successfully opened." << std::endl;
+        std::cout << "Shortcuts: Press 'q' to quit, '0' to switch to webcam, 'A' to switch to physical cam." << std::endl;
 
         auto lastSentTime = chrono::system_clock::now();
         const int sendIntervalMs = 1000;
         bool userQuit = false;
 
-        
         while (true) {
             Mat frame;
             cap >> frame;
+
             if (frame.empty()) {
-                std::cout << "[Warning] Video stream disconnected. Attempting to reconnect..." << std::endl;
+                std::cout << "\n[Warning] Video stream disconnected. Falling back to webcam..." << std::endl;
+                streamUrl = "0";
                 break;
             }
 
+            resize(frame, frame, Size(1280, 720));
+
             auto now = chrono::system_clock::now();
 
-            
             if (chrono::duration_cast<chrono::milliseconds>(now - lastSentTime).count() > sendIntervalMs) {
                 {
                     lock_guard<mutex> lock(queueMutex);
@@ -242,7 +310,6 @@ int main() {
                 lastSentTime = now;
             }
 
-          
             {
                 lock_guard<mutex> lock(frameMutex);
                 for (const auto& item : latestDetections) {
@@ -267,6 +334,16 @@ int main() {
                 userQuit = true;
                 break;
             }
+            else if (key == '0') {
+                std::cout << "[Manual Override] Switching to local webcam..." << std::endl;
+                streamUrl = "0";
+                break;
+            }
+            else if (key == 'a' || key == 'A') {
+                std::cout << "[Manual Override] Switching to physical camera..." << std::endl;
+                streamUrl = "rtsp://66.129.154.87:22022";
+                break;
+            }
         }
 
         cap.release();
@@ -275,8 +352,6 @@ int main() {
         if (userQuit) {
             break;
         }
-
-        Sleep(5000);
     }
 
     return 0;
