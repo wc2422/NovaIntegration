@@ -9,32 +9,16 @@
             0
         );
 
-    int criticalAlerts =
-        Model.RecentAlerts.Count(alert =>
-            alert.Severity == "Critical");
-
-    int highAlerts =
-        Model.RecentAlerts.Count(alert =>
-            alert.Severity == "High");
-
-    int mediumAlerts =
-        Model.RecentAlerts.Count(alert =>
-            alert.Severity == "Medium");
-
-    int lowAlerts =
-        Model.RecentAlerts.Count(alert =>
-            alert.Severity == "Low");
-
     double cameraAvailability =
         Model.TotalCameras > 0
             ? Model.ActiveCameras * 100.0 / Model.TotalCameras
             : 0;
 
-    double averageConfidence =
-        Model.RecentAlerts.Count > 0
-            ? Model.RecentAlerts.Average(alert =>
-                alert.Confidence)
-            : 0;
+    int chartMaxValue = Model.ActivityPoints
+        .Select(point => Math.Max(point.Detections, Math.Max(point.Alerts, point.HighConfidence)))
+        .DefaultIfEmpty(0)
+        .Max();
+    int chartScale = Math.Max(10, (int)(Math.Ceiling(chartMaxValue / 10.0) * 10));
 }
 
 <section class="soc-dashboard-page">
@@ -50,25 +34,25 @@
             <h1>Security Intelligence Dashboard</h1>
 
             <p>
-                Real-time overview of camera activity, AI detections,
-                system health and active security incidents.
+                Database-backed overview of camera status, AI detections,
+                recorded events and available system health data.
             </p>
 
             <div class="dashboard-command-status">
 
                 <span class="command-status-item">
-                    <i class="status-light status-online"></i>
-                    Monitoring active
+                    <i class="status-light @(Model.DatabaseConnected ? "status-online" : "status-offline")"></i>
+                    @Model.SystemStatus
                 </span>
 
                 <span class="command-status-item">
-                    <i class="status-light status-ai"></i>
-                    AI engine connected
+                    <i class="status-light @(Model.DatabaseConnected ? "status-online" : "status-offline")"></i>
+                    @Model.TotalCameras cameras in database
                 </span>
 
                 <span class="command-status-item">
-                    <i class="status-light status-secure"></i>
-                    Secure network
+                    <i class="status-light @(Model.DatabaseConnected ? "status-online" : "status-offline")"></i>
+                    @Model.DetectionsToday detections today
                 </span>
 
             </div>
@@ -109,7 +93,7 @@
                 </div>
 
                 <span class="kpi-live-label">
-                    LIVE
+                    @(Model.DatabaseConnected ? "DATABASE" : "NO DATA")
                 </span>
 
             </div>
@@ -129,7 +113,7 @@
                 </span>
 
                 <strong>
-                    @offlineCameras offline
+                    @offlineCameras not active
                 </strong>
 
             </div>
@@ -150,8 +134,8 @@
                     ✓
                 </div>
 
-                <span class="kpi-status-positive">
-                    OPERATIONAL
+                <span class="@(Model.DatabaseConnected ? "kpi-status-positive" : "kpi-status-warning")">
+                    @(Model.DatabaseConnected ? "DATABASE" : "NO DATA")
                 </span>
 
             </div>
@@ -161,7 +145,7 @@
             </div>
 
             <div class="kpi-card-title">
-                Active camera feeds
+                Active cameras in database
             </div>
 
             <div class="kpi-card-footer">
@@ -177,7 +161,8 @@
             </div>
 
             <div class="kpi-progress-track">
-                <div class="kpi-progress-fill">
+                <div class="kpi-progress-fill"
+                     style="width: @cameraAvailability.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%">
                 </div>
             </div>
 
@@ -192,7 +177,7 @@
                 </div>
 
                 <span class="kpi-status-warning">
-                    ATTENTION
+                    @(Model.DatabaseConnected ? "DATABASE" : "NO DATA")
                 </span>
 
             </div>
@@ -208,19 +193,13 @@
             <div class="kpi-card-footer">
 
                 <span>
-                    Critical incidents
+                    Event types today
                 </span>
 
                 <strong>
-                    @criticalAlerts
+                    @Model.EventTypeCounts.Count
                 </strong>
 
-            </div>
-
-            <div class="kpi-progress-track">
-                <div class="kpi-progress-fill"
-                     style="width: 68%">
-                </div>
             </div>
 
         </article>
@@ -234,7 +213,7 @@
                 </div>
 
                 <span class="kpi-status-ai">
-                    YOLO ACTIVE
+                    @(Model.DatabaseConnected ? "DATABASE" : "NO DATA")
                 </span>
 
             </div>
@@ -254,14 +233,14 @@
                 </span>
 
                 <strong>
-                    @averageConfidence.ToString("0.0")%
+                    @Model.AverageConfidence.ToString("0.0")%
                 </strong>
 
             </div>
 
             <div class="kpi-progress-track">
                 <div class="kpi-progress-fill"
-                     style="width: @averageConfidence.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%">
+                     style="width: @Model.AverageConfidence.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%">
                 </div>
             </div>
 
@@ -283,8 +262,8 @@
                     <h2>Detection Activity</h2>
                 </div>
 
-                <select id="dashboardActivityRange"
-                        onchange="renderDashboardActivityChart()">
+                <select asp-for="RangeHours" id="dashboardActivityRange"
+                        onchange="window.location.href='?rangeHours=' + this.value">
                     <option value="12">Last 12 hours</option>
                     <option value="24">Last 24 hours</option>
                     <option value="48">Last 48 hours</option>
@@ -295,14 +274,28 @@
             <div class="dashboard-chart-layout">
 
                 <div class="dashboard-chart-scale">
-                    <span>30</span>
-                    <span>20</span>
-                    <span>10</span>
+                    <span>@chartScale</span>
+                    <span>@(chartScale * 2 / 3)</span>
+                    <span>@(chartScale / 3)</span>
                     <span>0</span>
                 </div>
 
                 <div id="dashboardActivityChart"
                      class="dashboard-activity-chart">
+                    @foreach (var point in Model.ActivityPoints)
+                    {
+                        <div class="dashboard-chart-bar-group" title="@point.Hour.ToString("yyyy-MM-dd HH:00")">
+                            <div class="dashboard-chart-bars">
+                                <div class="dashboard-chart-bar dashboard-detection-bar"
+                                     style="height: @(point.Detections * 100.0 / chartScale).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                                <div class="dashboard-chart-bar dashboard-alert-bar"
+                                     style="height: @(point.Alerts * 100.0 / chartScale).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                                <div class="dashboard-chart-bar dashboard-critical-bar"
+                                     style="height: @(point.HighConfidence * 100.0 / chartScale).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                            </div>
+                            <span>@point.Label</span>
+                        </div>
+                    }
                 </div>
 
             </div>
@@ -321,7 +314,7 @@
 
                 <span>
                     <i class="legend-mark critical-mark"></i>
-                    Critical
+                    High confidence (90%+)
                 </span>
 
             </div>
@@ -334,14 +327,14 @@
 
                 <div>
                     <span class="dashboard-panel-eyebrow">
-                        RISK DISTRIBUTION
+                        DATABASE EVENTS TODAY
                     </span>
 
-                    <h2>Threat Levels</h2>
+                    <h2>Event Types</h2>
                 </div>
 
-                <span class="dashboard-live-chip">
-                    LIVE
+                    <span class="dashboard-live-chip">
+                    @(Model.DatabaseConnected ? "DATABASE" : "NO DATA")
                 </span>
 
             </div>
@@ -357,58 +350,28 @@
                     <div class="radar-cross radar-cross-horizontal"></div>
                     <div class="radar-cross radar-cross-vertical"></div>
 
-                    <div class="radar-sweep"></div>
-
-                    <span class="radar-point radar-point-one"></span>
-                    <span class="radar-point radar-point-two"></span>
-                    <span class="radar-point radar-point-three"></span>
-                    <span class="radar-point radar-point-four"></span>
-
                     <div class="radar-centre">
                         <strong>@Model.AlertsToday</strong>
-                        <small>ALERTS</small>
+                        <small>ALERTS TODAY</small>
                     </div>
 
                 </div>
 
                 <div class="dashboard-threat-list">
-
-                    <div>
-                        <span>
-                            <i class="threat-dot threat-critical"></i>
-                            Critical
-                        </span>
-
-                        <strong>@criticalAlerts</strong>
-                    </div>
-
-                    <div>
-                        <span>
-                            <i class="threat-dot threat-high"></i>
-                            High
-                        </span>
-
-                        <strong>@highAlerts</strong>
-                    </div>
-
-                    <div>
-                        <span>
-                            <i class="threat-dot threat-medium"></i>
-                            Medium
-                        </span>
-
-                        <strong>@mediumAlerts</strong>
-                    </div>
-
-                    <div>
-                        <span>
-                            <i class="threat-dot threat-low"></i>
-                            Low
-                        </span>
-
-                        <strong>@lowAlerts</strong>
-                    </div>
-
+                    @if (Model.EventTypeCounts.Count > 0)
+                    {
+                        foreach (var eventType in Model.EventTypeCounts)
+                        {
+                            <div>
+                                <span>@eventType.EventType</span>
+                                <strong>@eventType.Count</strong>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div><span>No event types</span><strong>0</strong></div>
+                    }
                 </div>
 
             </div>
@@ -427,8 +390,8 @@
                     <h2>System Health</h2>
                 </div>
 
-                <span class="dashboard-health-percent">
-                    98.7%
+                <span class="dashboard-health-percent @(Model.DatabaseConnected ? "" : "dashboard-health-unavailable")">
+                    @Model.SystemStatus
                 </span>
 
             </div>
@@ -439,12 +402,12 @@
 
                     <div class="health-row-heading">
                         <span>Camera network</span>
-                        <strong>98%</strong>
+                        <strong>@cameraAvailability.ToString("0")%</strong>
                     </div>
 
                     <div class="health-track">
                         <div class="health-fill"
-                             style="width: 98%">
+                             style="width: @cameraAvailability.ToString("0", System.Globalization.CultureInfo.InvariantCulture)%">
                         </div>
                     </div>
 
@@ -453,13 +416,13 @@
                 <div class="health-row">
 
                     <div class="health-row-heading">
-                        <span>AI inference engine</span>
-                        <strong>99%</strong>
+                        <span>AI health telemetry records</span>
+                        <strong>0</strong>
                     </div>
 
                     <div class="health-track">
                         <div class="health-fill"
-                             style="width: 99%">
+                             style="width: 0%">
                         </div>
                     </div>
 
@@ -469,12 +432,12 @@
 
                     <div class="health-row-heading">
                         <span>Database connection</span>
-                        <strong>97%</strong>
+                        <strong>@Model.DatabaseAvailability.ToString("0")%</strong>
                     </div>
 
                     <div class="health-track">
                         <div class="health-fill"
-                             style="width: 97%">
+                             style="width: @Model.DatabaseAvailability.ToString("0", System.Globalization.CultureInfo.InvariantCulture)%">
                         </div>
                     </div>
 
@@ -483,13 +446,13 @@
                 <div class="health-row">
 
                     <div class="health-row-heading">
-                        <span>Alert delivery service</span>
-                        <strong>100%</strong>
+                        <span>Alert delivery telemetry records</span>
+                        <strong>0</strong>
                     </div>
 
                     <div class="health-track">
                         <div class="health-fill"
-                             style="width: 100%">
+                             style="width: 0%">
                         </div>
                     </div>
 
@@ -501,13 +464,13 @@
 
                 <span>
                     <i></i>
-                    All core systems operational
+                    @Model.SystemStatus
                 </span>
 
                 <small>
-                    Updated
+                    Checked
                     <span id="dashboardHealthTime">
-                        @DateTime.Now.ToString("HH:mm:ss")
+                        @Model.LastCheckedAt.ToString("HH:mm:ss")
                     </span>
                 </small>
 
@@ -528,7 +491,7 @@
                         INCIDENT MONITORING
                     </span>
 
-                    <h2>Recent Alerts</h2>
+                    <h2>Recent Events</h2>
                 </div>
 
                 <a asp-controller="Alerts"
@@ -595,6 +558,12 @@
 
                     </div>
                 }
+                @if (Model.RecentAlerts.Count == 0)
+                {
+                    <div class="dashboard-empty-state">
+                        @(Model.DatabaseConnected ? "No events recorded." : "Database unavailable. 0 events loaded.")
+                    </div>
+                }
 
             </div>
 
@@ -652,15 +621,11 @@
                             </div>
 
                             <span class="camera-preview-code">
-                                LIVE FEED
+                                DATABASE STATUS
                             </span>
 
-                            <div class="camera-focus-box"></div>
-
-                            <div class="camera-scan-beam"></div>
-
                             <div class="camera-preview-label">
-                                AI MONITORING
+                                STATUS ONLY
                             </div>
 
                         </div>
@@ -685,6 +650,12 @@
 
                     </div>
                 }
+                @if (Model.CameraStatuses.Count == 0)
+                {
+                    <div class="dashboard-empty-state">
+                        @(Model.DatabaseConnected ? "No cameras found in the database." : "Database unavailable. 0 cameras loaded.")
+                    </div>
+                }
 
             </div>
 
@@ -696,7 +667,7 @@
 
                 <div>
                     <span class="dashboard-panel-eyebrow">
-                        REAL-TIME OPERATIONS
+                    DATABASE ACTIVITY
                     </span>
 
                     <h2>System Activity</h2>
@@ -704,7 +675,7 @@
 
                 <span class="activity-connected-label">
                     <i></i>
-                    Connected
+                    @Model.SystemStatus
                 </span>
 
             </div>
@@ -733,10 +704,10 @@
                     <div class="dashboard-feed-item">
                         <span class="feed-line feed-blue"></span>
                         <div>
-                            <strong>System online</strong>
-                            <small>Waiting for edge detections...</small>
+                            <strong>@(Model.DatabaseConnected ? "No events recorded" : "Database unavailable")</strong>
+                            <small>0 events loaded</small>
                         </div>
-                        <time>@DateTime.Now.ToString("HH:mm:ss")</time>
+                        <time>@Model.LastCheckedAt.ToString("HH:mm:ss")</time>
                     </div>
                 }
 
@@ -744,42 +715,10 @@
 
         </article>
 
-<div id="dashboardToast"
-     class="dashboard-toast">
-
-    <span>✓</span>
-
-    <strong id="dashboardToastMessage">
-        Dashboard refreshed successfully.
-    </strong>
-
-</div>
-
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         updateDashboardClock();
-        renderDashboardActivityChart();
-
         window.setInterval(updateDashboardClock, 1000);
-        window.setInterval(addDashboardLiveEvent, 8000);
-
-        const feedImg = document.getElementById("liveCameraFeed");
-
-        if (feedImg) {
-            function fetchNextFrame() {
-                feedImg.src = "/Cameras/GetLiveFrame?t=" + new Date().getTime();
-            }
-
-            feedImg.onload = function () {
-                setTimeout(fetchNextFrame, 30);
-            };
-
-            feedImg.onerror = function () {
-                setTimeout(fetchNextFrame, 100);
-            };
-
-            fetchNextFrame();
-        }
     });
 
     function updateDashboardClock() {
@@ -798,194 +737,7 @@
         }
     }
 
-    function renderDashboardActivityChart() {
-        const chart =
-            document.getElementById(
-                "dashboardActivityChart"
-            );
-
-        if (!chart) {
-            return;
-        }
-
-        chart.innerHTML = "";
-
-        const selectedRange =
-            Number(
-                document.getElementById(
-                    "dashboardActivityRange"
-                ).value
-            );
-
-        const pointCount =
-            selectedRange === 12
-                ? 12
-                : selectedRange === 24
-                    ? 16
-                    : 20;
-
-        for (
-            let index = 0;
-            index < pointCount;
-            index++
-        ) {
-            const detections =
-                8 +
-                Math.floor(
-                    Math.random() * 19
-                );
-
-            const alerts =
-                3 +
-                Math.floor(
-                    Math.random() * 12
-                );
-
-            const critical =
-                1 +
-                Math.floor(
-                    Math.random() * 7
-                );
-
-            const group =
-                document.createElement("div");
-
-            group.className =
-                "dashboard-chart-bar-group";
-
-            group.innerHTML = `
-                <div class="dashboard-chart-bars">
-                    <div class="dashboard-chart-bar dashboard-detection-bar"
-                         style="height: ${detections / 30 * 100}%">
-                    </div>
-
-                    <div class="dashboard-chart-bar dashboard-alert-bar"
-                         style="height: ${alerts / 30 * 100}%">
-                    </div>
-
-                    <div class="dashboard-chart-bar dashboard-critical-bar"
-                         style="height: ${critical / 30 * 100}%">
-                    </div>
-                </div>
-
-                <span>
-                    ${String(index * 2).padStart(2, "0")}
-                </span>
-            `;
-
-            chart.appendChild(group);
-        }
-    }
-
     function refreshDashboard() {
-        document.getElementById(
-            "dashboardHealthTime"
-        ).textContent =
-            new Date().toLocaleTimeString([], {
-                hour12: false
-            });
-
-        renderDashboardActivityChart();
-
-        showDashboardToast(
-            "Security intelligence refreshed successfully."
-        );
-    }
-
-    function addDashboardLiveEvent() {
-        const feed =
-            document.getElementById(
-                "dashboardLiveFeed"
-            );
-
-        if (!feed) {
-            return;
-        }
-
-        const events = [
-            {
-                type: "blue",
-                title: "AI detection processed",
-                source: "Reception Camera"
-            },
-            {
-                type: "green",
-                title: "Camera heartbeat received",
-                source: "North Stairwell Camera"
-            },
-            {
-                type: "red",
-                title: "Critical alert generated",
-                source: "Emergency Exit Camera"
-            },
-            {
-                type: "orange",
-                title: "Alert assigned to officer",
-                source: "West Parking Camera"
-            },
-            {
-                type: "purple",
-                title: "Analytics engine synchronised",
-                source: "NovaVision Core"
-            }
-        ];
-
-        const event =
-            events[
-                Math.floor(
-                    Math.random() *
-                    events.length
-                )
-            ];
-
-        const item =
-            document.createElement("div");
-
-        item.className =
-            "dashboard-feed-item feed-new";
-
-        item.innerHTML = `
-            <span class="feed-line feed-${event.type}">
-            </span>
-
-            <div>
-                <strong>${event.title}</strong>
-                <small>${event.source}</small>
-            </div>
-
-            <time>
-                ${new Date().toLocaleTimeString([], {
-                    hour12: false
-                })}
-            </time>
-        `;
-
-        feed.prepend(item);
-
-        while (feed.children.length > 6) {
-            feed.removeChild(
-                feed.lastElementChild
-            );
-        }
-    }
-
-    function showDashboardToast(message) {
-        const toast =
-            document.getElementById(
-                "dashboardToast"
-            );
-
-        document.getElementById(
-            "dashboardToastMessage"
-        ).textContent = message;
-
-        toast.classList.add("show");
-
-        window.setTimeout(
-            function () {
-                toast.classList.remove("show");
-            },
-            3000
-        );
+        window.location.reload();
     }
 </script>
