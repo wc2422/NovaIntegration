@@ -69,7 +69,7 @@ namespace NovaIntegration.Web.Controllers
 
         private static void LoadCameras(OracleConnection connection, DashboardViewModel model)
         {
-            const string query = "SELECT CAMERA_ID, LOCATION_NAME, STATUS FROM CAMERAS ORDER BY CAMERA_ID";
+            const string query = "SELECT CAMERAID, LOCATION_NAME, STATUS FROM CAMERAS ORDER BY CAMERAID";
             using OracleCommand command = new(query, connection);
             using OracleDataReader reader = command.ExecuteReader();
 
