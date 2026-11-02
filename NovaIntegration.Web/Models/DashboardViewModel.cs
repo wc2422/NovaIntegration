@@ -18,6 +18,8 @@ namespace NovaIntegration.Web.Models
 
         public bool DatabaseConnected { get; set; }
 
+        public bool DashboardDataUnavailable { get; set; }
+
         public double DatabaseAvailability { get; set; }
 
         public DateTime LastCheckedAt { get; set; }

@@ -44,19 +44,40 @@ namespace NovaIntegration.Web.Controllers
                 using OracleConnection connection = new(connectionString);
                 connection.Open();
 
-                LoadCameras(connection, model);
-                LoadTodaySummary(connection, model);
-                LoadEventTypeCounts(connection, model);
-                LoadActivity(connection, model, rangeHours);
-                LoadRecentEvents(connection, model);
+                string section = "cameras";
+                try
+                {
+                    LoadCameras(connection, model);
+                    section = "today's summary";
+                    LoadTodaySummary(connection, model);
+                    section = "event types";
+                    LoadEventTypeCounts(connection, model);
+                    section = "activity";
+                    LoadActivity(connection, model, rangeHours);
+                    section = "recent events";
+                    LoadRecentEvents(connection, model);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(exception, "Could not load dashboard section {Section}.", section);
+                    ResetDatabaseValues(model);
+                    // A data conversion/query error does not mean Oracle is offline.
+                    // Verify connectivity separately; a failed probe reaches the outer catch.
+                    using OracleCommand probe = new("SELECT 1 FROM DUAL", connection);
+                    probe.CommandTimeout = 5;
+                    probe.ExecuteScalar();
+                    model.DashboardDataUnavailable = true;
+                }
 
                 model.DatabaseConnected = true;
-                model.SystemStatus = "Database connected";
+                model.SystemStatus = model.DashboardDataUnavailable
+                    ? "Database connected; dashboard data unavailable"
+                    : "Database connected";
                 model.DatabaseAvailability = 100;
             }
             catch (Exception exception)
             {
-                _logger.LogWarning(exception, "Oracle is unavailable. Dashboard values are shown as zero.");
+                _logger.LogWarning(exception, "Oracle connection could not be established or verified.");
                 ResetDatabaseValues(model);
                 model.SystemStatus = "Database unavailable";
                 model.DatabaseConnected = false;
@@ -112,7 +133,8 @@ namespace NovaIntegration.Web.Controllers
             {
                 model.DetectionsToday = Convert.ToInt32(reader.GetDecimal(1));
                 model.AlertsToday = Convert.ToInt32(reader.GetDecimal(2));
-                model.AverageConfidence = Convert.ToDouble(reader.GetDecimal(3));
+                // AVG(NUMBER) can exceed .NET decimal precision even for small percentages.
+                model.AverageConfidence = reader.GetOracleDecimal(3).ToDouble();
             }
         }
 
@@ -190,7 +212,7 @@ namespace NovaIntegration.Web.Controllers
             using OracleDataReader reader = command.ExecuteReader();
             while (reader.Read())
             {
-                double confidence = reader.IsDBNull(4) ? 0 : Convert.ToDouble(reader.GetDecimal(4));
+                double confidence = reader.IsDBNull(4) ? 0 : reader.GetOracleDecimal(4).ToDouble();
                 int cameraId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
                 model.RecentAlerts.Add(new DashboardAlertViewModel
                 {

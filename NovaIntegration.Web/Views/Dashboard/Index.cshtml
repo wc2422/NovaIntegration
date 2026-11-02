@@ -82,6 +82,14 @@
 
     </header>
 
+    @if (Model.DashboardDataUnavailable)
+    {
+        <p role="alert" class="alert alert-warning">
+            The database is reachable, but dashboard data could not be loaded.
+            The zero values below do not represent current activity. Please contact your administrator.
+        </p>
+    }
+
     <section class="dashboard-kpi-grid">
 
         <article class="dashboard-kpi-card kpi-cameras">
